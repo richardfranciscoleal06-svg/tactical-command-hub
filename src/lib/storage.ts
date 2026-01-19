@@ -5,6 +5,7 @@ const KEYS = {
   PATROLS: 'pm19_patrulhas',
   SEIZURES: 'pm19_apreensoes',
   LOGS: 'pm19_logs',
+  PDF_GENERATED: 'pm19_pdf_generated',
 };
 
 // Police Officers
@@ -117,4 +118,74 @@ export const getWeeklyHours = (policialId: string): number => {
   });
   
   return weeklyPatrols.reduce((acc, p) => acc + (p.horasTrabalhadas || 0), 0);
+};
+
+// Get approved seizures for dashboard
+export const getApprovedSeizures = (): Seizure[] => {
+  return getSeizures().filter(s => s.status === 'approved');
+};
+
+// Get weekly seizures totals
+export const getWeeklySeizureTotals = () => {
+  const oneWeekAgo = new Date();
+  oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+  
+  const weeklySeizures = getApprovedSeizures().filter(s => {
+    const seizureDate = new Date(s.createdAt);
+    return seizureDate >= oneWeekAgo;
+  });
+  
+  const totals = {
+    sementeCannabis: 0,
+    cannabisNatura: 0,
+    fenilacetona: 0,
+    acidoCloridrico: 0,
+    metilamina: 0,
+    maconha: 0,
+    metanfetamina: 0,
+    pecasArmas: 0,
+    fuzil: 0,
+    submetralhadora: 0,
+    pistola: 0,
+    municoes762: 0,
+    municoes556: 0,
+    municoes9mm: 0,
+    dinheiroSujo: 0,
+    coleteBalístico: 0,
+    lockpick: 0,
+    flipperZero: 0,
+    kevlar: 0,
+  };
+  
+  weeklySeizures.forEach(s => {
+    Object.keys(totals).forEach(key => {
+      totals[key as keyof typeof totals] += s.itens[key as keyof typeof s.itens] || 0;
+    });
+  });
+  
+  return { totals, count: weeklySeizures.length };
+};
+
+// PDF generation tracking
+export const setPdfGenerated = (value: boolean): void => {
+  localStorage.setItem(KEYS.PDF_GENERATED, JSON.stringify(value));
+};
+
+export const wasPdfGenerated = (): boolean => {
+  const data = localStorage.getItem(KEYS.PDF_GENERATED);
+  return data ? JSON.parse(data) : false;
+};
+
+// Reset dashboards (clear weekly data)
+export const resetDashboards = (): void => {
+  // Reset patrols - keep structure but clear hours
+  const patrols = getPatrols().filter(p => p.status !== 'approved');
+  savePatrols(patrols);
+  
+  // Reset seizures - keep structure but clear approved ones
+  const seizures = getSeizures().filter(s => s.status !== 'approved');
+  saveSeizures(seizures);
+  
+  // Reset PDF flag
+  setPdfGenerated(false);
 };
