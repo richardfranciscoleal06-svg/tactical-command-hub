@@ -4,9 +4,6 @@ import {
   getApprovedPolice, 
   getWeeklyHours, 
   getWeeklySeizureTotals,
-  wasPdfGenerated,
-  setPdfGenerated,
-  resetDashboards
 } from '@/lib/storage';
 import { 
   LayoutDashboard, 
@@ -14,15 +11,7 @@ import {
   TrendingUp, 
   Users, 
   Package, 
-  FileDown, 
-  RotateCcw,
-  AlertTriangle,
-  Check
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { toast } from 'sonner';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
 
 const META_HORAS = 8;
 
@@ -52,7 +41,6 @@ export const AdminDashboard = () => {
   const [policiais, setPoliciais] = useState<Police[]>([]);
   const [horasData, setHorasData] = useState<Record<string, number>>({});
   const [seizureData, setSeizureData] = useState<{ totals: Record<string, number>; count: number }>({ totals: {}, count: 0 });
-  const [canReset, setCanReset] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -70,8 +58,6 @@ export const AdminDashboard = () => {
     
     const seizures = getWeeklySeizureTotals();
     setSeizureData(seizures);
-    
-    setCanReset(wasPdfGenerated());
   };
 
   const totalHoras = Object.values(horasData).reduce((a, b) => a + b, 0);
@@ -81,114 +67,6 @@ export const AdminDashboard = () => {
     : 0;
 
   const totalItensApreendidos = Object.values(seizureData.totals).reduce((a, b) => a + b, 0);
-
-  const generatePDF = () => {
-    const doc = new jsPDF();
-    const currentDate = new Date().toLocaleDateString('pt-BR');
-    const currentTime = new Date().toLocaleTimeString('pt-BR');
-
-    // Header
-    doc.setFontSize(18);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Sistema Policial do 19º Batalhão', 105, 20, { align: 'center' });
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Relatório Semanal - ${currentDate} às ${currentTime}`, 105, 28, { align: 'center' });
-
-    // Summary stats
-    doc.setFontSize(14);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Resumo Geral', 14, 42);
-    
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Policiais Ativos: ${policiaisAtivos}`, 14, 52);
-    doc.text(`Total de Horas: ${totalHoras.toFixed(1)}h`, 14, 58);
-    doc.text(`Média por Policial: ${mediaHoras.toFixed(1)}h`, 14, 64);
-    doc.text(`Total de Apreensões: ${seizureData.count}`, 14, 70);
-    doc.text(`Total de Itens Apreendidos: ${totalItensApreendidos}`, 14, 76);
-
-    // Hours table
-    doc.setFontSize(14);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Carga Horária Semanal', 14, 90);
-
-    const horasTableData = policiais.map(p => {
-      const horas = horasData[p.id] || 0;
-      const status = horas >= META_HORAS ? 'Meta atingida' : 'Abaixo da meta';
-      return [p.nomeCompleto, p.cargo, p.rg, `${horas.toFixed(1)}h`, status];
-    });
-
-    autoTable(doc, {
-      startY: 95,
-      head: [['Policial', 'Cargo', 'RG', 'Horas', 'Status']],
-      body: horasTableData,
-      theme: 'striped',
-      headStyles: { fillColor: [30, 41, 59] },
-      styles: { fontSize: 9 },
-    });
-
-    // Seizure table
-    const finalY = (doc as any).lastAutoTable.finalY + 15;
-    
-    doc.setFontSize(14);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Itens Apreendidos na Semana', 14, finalY);
-
-    const seizureTableData = Object.entries(seizureData.totals)
-      .filter(([_, value]) => value > 0)
-      .map(([key, value]) => [ITEM_LABELS[key] || key, value.toString()]);
-
-    if (seizureTableData.length > 0) {
-      autoTable(doc, {
-        startY: finalY + 5,
-        head: [['Item', 'Quantidade']],
-        body: seizureTableData,
-        theme: 'striped',
-        headStyles: { fillColor: [30, 41, 59] },
-        styles: { fontSize: 9 },
-      });
-    } else {
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'normal');
-      doc.text('Nenhum item apreendido esta semana.', 14, finalY + 10);
-    }
-
-    // Footer
-    const pageCount = doc.getNumberOfPages();
-    for (let i = 1; i <= pageCount; i++) {
-      doc.setPage(i);
-      doc.setFontSize(8);
-      doc.text(
-        `Página ${i} de ${pageCount} - Gerado automaticamente pelo Sistema Policial do 19º Batalhão`,
-        105,
-        doc.internal.pageSize.height - 10,
-        { align: 'center' }
-      );
-    }
-
-    // Save PDF
-    doc.save(`relatorio-semanal-19bn-${currentDate.replace(/\//g, '-')}.pdf`);
-    
-    // Mark PDF as generated
-    setPdfGenerated(true);
-    setCanReset(true);
-    
-    toast.success('PDF gerado com sucesso!');
-  };
-
-  const handleReset = () => {
-    if (!canReset) {
-      toast.error('Você precisa gerar o PDF antes de resetar os dashboards.');
-      return;
-    }
-    
-    if (confirm('Tem certeza que deseja resetar todos os dados dos dashboards? Esta ação não pode ser desfeita.')) {
-      resetDashboards();
-      loadData();
-      toast.success('Dashboards resetados com sucesso!');
-    }
-  };
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -202,37 +80,7 @@ export const AdminDashboard = () => {
             <p className="text-sm text-muted-foreground">Monitoramento de carga horária e apreensões semanais</p>
           </div>
         </div>
-        
-        <div className="flex gap-2">
-          <Button onClick={generatePDF} className="gap-2">
-            <FileDown className="w-4 h-4" />
-            Gerar PDF
-          </Button>
-          <Button 
-            onClick={handleReset} 
-            variant={canReset ? "destructive" : "outline"}
-            className="gap-2"
-            disabled={!canReset}
-          >
-            <RotateCcw className="w-4 h-4" />
-            Resetar
-          </Button>
-        </div>
       </div>
-
-      {!canReset && (
-        <div className="flex items-center gap-2 p-3 rounded-lg bg-warning/10 border border-warning/30 text-warning text-sm">
-          <AlertTriangle className="w-4 h-4" />
-          <span>Gere o PDF da semana antes de resetar os dashboards.</span>
-        </div>
-      )}
-
-      {canReset && (
-        <div className="flex items-center gap-2 p-3 rounded-lg bg-success/10 border border-success/30 text-success text-sm">
-          <Check className="w-4 h-4" />
-          <span>PDF gerado! Você pode resetar os dashboards quando desejar.</span>
-        </div>
-      )}
 
       <div className="grid sm:grid-cols-4 gap-4">
         <div className="tactical-card p-6">

@@ -95,7 +95,7 @@ export const PoliceRegistration = () => {
         </div>
         <div>
           <h2 className="text-xl font-semibold">Registro Policial</h2>
-          <p className="text-sm text-muted-foreground">Cadastre novos membros do batalhão</p>
+          <p className="text-sm text-muted-foreground">Cadastre novos membros do departamento</p>
         </div>
       </div>
 
