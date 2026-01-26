@@ -108,7 +108,7 @@ export interface AuditLog {
   dataHora: string;
 }
 
-export type TabType = 'patrulhamento' | 'apf' | 'cadastro' | 'administrativo' | 'setor' | 'chefia';
+export type TabType = 'patrulhamento' | 'apf' | 'cadastro' | 'administrativo' | 'setor' | 'chefia' | 'usuarios';
 
 export const UNIDADES = [
   'Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo', 'Foxtrot', 
