@@ -220,7 +220,7 @@ export const AdminSector = () => {
           </TabsTrigger>
           <TabsTrigger value="seizures" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
             <Package className="w-4 h-4" />
-            Apreensões
+            APFs
             {pendingSeizures.length > 0 && (
               <span className="ml-1 px-1.5 py-0.5 text-xs rounded-full bg-warning text-warning-foreground">
                 {pendingSeizures.length}
@@ -293,7 +293,7 @@ export const AdminSector = () => {
           {pendingSeizures.length === 0 ? (
             <div className="tactical-card p-8 text-center text-muted-foreground">
               <Package className="w-12 h-12 mx-auto mb-4 opacity-50" />
-              Nenhuma apreensão pendente
+              Nenhum APF pendente
             </div>
           ) : (
             pendingSeizures.map(seizure => {
@@ -301,9 +301,42 @@ export const AdminSector = () => {
               return (
                 <div key={seizure.id} className="tactical-card p-4">
                   <div className="flex items-start justify-between gap-4">
-                    <div>
+                    <div className="flex-1">
                       <p className="font-semibold">{seizure.policialNome}</p>
-                      <p className="text-sm text-muted-foreground">
+                      
+                      {/* Informações do Indivíduo */}
+                      {seizure.nomeIndividuo && (
+                        <div className="mt-2 p-2 bg-destructive/10 rounded border border-destructive/30">
+                          <p className="text-sm font-medium text-destructive">Indivíduo Apreendido:</p>
+                          <p className="text-sm">{seizure.nomeIndividuo} - RG: {seizure.rgIndividuo}</p>
+                        </div>
+                      )}
+                      
+                      {/* Policiais da QRU */}
+                      {seizure.policiaisQru && (
+                        <div className="mt-2 p-2 bg-muted/30 rounded border border-tactical-border">
+                          <p className="text-sm font-medium text-primary">Policiais da QRU:</p>
+                          <p className="text-sm text-muted-foreground">{seizure.policiaisQru}</p>
+                        </div>
+                      )}
+                      
+                      {/* Informações da QRU - Descrição para análise */}
+                      {seizure.informacoesQru && (
+                        <div className="mt-2 p-3 bg-primary/5 rounded border border-primary/30">
+                          <p className="text-sm font-medium text-primary">Informações da Ocorrência (QRU):</p>
+                          <p className="text-sm text-muted-foreground whitespace-pre-wrap">{seizure.informacoesQru}</p>
+                        </div>
+                      )}
+                      
+                      {/* Artigos */}
+                      {seizure.artigos && seizure.artigos.length > 0 && (
+                        <div className="mt-2">
+                          <p className="text-sm font-medium">Artigos: <span className="text-primary">{seizure.artigos.join(', ')}</span></p>
+                          <p className="text-sm text-warning">Tempo de prisão: {seizure.tempoPrisao} minutos</p>
+                        </div>
+                      )}
+                      
+                      <p className="text-sm text-muted-foreground mt-2">
                         {totalItens} itens apreendidos
                       </p>
                       {seizure.urlComprovacao && (
@@ -323,7 +356,7 @@ export const AdminSector = () => {
                     <div className="flex gap-2">
                       <Button
                         size="sm"
-                        onClick={() => openApprovalModal('seizure', seizure.id, 'approve', `Apreensão de ${seizure.policialNome}`)}
+                        onClick={() => openApprovalModal('seizure', seizure.id, 'approve', `APF de ${seizure.policialNome}`)}
                         className="gap-1"
                       >
                         <Check className="w-4 h-4" />
@@ -332,7 +365,7 @@ export const AdminSector = () => {
                       <Button
                         size="sm"
                         variant="destructive"
-                        onClick={() => openApprovalModal('seizure', seizure.id, 'reject', `Apreensão de ${seizure.policialNome}`)}
+                        onClick={() => openApprovalModal('seizure', seizure.id, 'reject', `APF de ${seizure.policialNome}`)}
                         className="gap-1"
                       >
                         <X className="w-4 h-4" />

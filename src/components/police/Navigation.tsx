@@ -5,7 +5,8 @@ import {
   UserPlus, 
   LayoutDashboard, 
   Lock,
-  Crown
+  Crown,
+  Users
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -20,6 +21,7 @@ const tabs: { id: TabType; label: string; icon: React.ReactNode }[] = [
   { id: 'cadastro', label: 'Cadastro', icon: <UserPlus className="w-5 h-5" /> },
   { id: 'administrativo', label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
   { id: 'setor', label: 'Setor Admin', icon: <Lock className="w-5 h-5" /> },
+  { id: 'usuarios', label: 'Usuários', icon: <Users className="w-5 h-5" /> },
   { id: 'chefia', label: 'Chefia DAP', icon: <Crown className="w-5 h-5" /> },
 ];
 
