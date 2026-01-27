@@ -134,7 +134,7 @@ export const ChefiaDAP = () => {
     // Header
     doc.setFontSize(18);
     doc.setFont('helvetica', 'bold');
-    doc.text('Departamento de Administração e Planejamento - PCESP', 105, 20, { align: 'center' });
+    doc.text('Departamento de Ensino e Carreira - PCESP', 105, 20, { align: 'center' });
     doc.setFontSize(12);
     doc.setFont('helvetica', 'normal');
     doc.text(`Relatório Semanal - ${currentDate} às ${currentTime}`, 105, 28, { align: 'center' });
