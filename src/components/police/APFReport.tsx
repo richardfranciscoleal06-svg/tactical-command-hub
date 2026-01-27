@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Police, Seizure, ARTIGOS_PENAIS } from '@/types/police';
 import { getApprovedPolice, getPoliciesOnDuty, addSeizure } from '@/lib/storage';
+import { isValidUrl } from '@/lib/urlValidator';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -165,6 +166,11 @@ export const APFReport = () => {
 
     if (!urlComprovacao.trim()) {
       toast.error('URL de comprovação é obrigatória');
+      return;
+    }
+
+    if (!isValidUrl(urlComprovacao)) {
+      toast.error('URL inválida. Use apenas links HTTPS válidos.');
       return;
     }
 
