@@ -1,22 +1,28 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { Police, Patrol, Seizure } from '@/types/police';
+import { Police, Seizure, CARGOS } from '@/types/police';
 import { 
   getApprovedPolice, 
-  getWeeklyHours, 
   getWeeklySeizureTotals,
   wasPdfGenerated,
   setPdfGenerated,
   resetDashboards,
   getPolice,
   savePolice,
-  getPatrols,
-  savePatrols,
   getSeizures,
   saveSeizures,
 } from '@/lib/storage';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from '@/components/ui/select';
 import { 
   Dialog,
   DialogContent,
@@ -34,10 +40,10 @@ import {
   Database,
   Trash2,
   Users,
-  Car,
   FileText,
   ShieldAlert,
-  Loader2
+  Loader2,
+  Pencil
 } from 'lucide-react';
 import { toast } from 'sonner';
 import jsPDF from 'jspdf';
@@ -65,20 +71,39 @@ const ITEM_LABELS: Record<string, string> = {
   kevlar: 'Kevlar',
 };
 
+// Extended CARGOS for editing (all ranks)
+const ALL_CARGOS = [
+  'Delegado Geral',
+  'Delegado Geral Adjunto',
+  'Delegado Titular',
+  'Delegado Substituto',
+  'Inspetor',
+  'Escrivão',
+  'Agente Especial',
+  'Agente 1ª Classe',
+  'Agente 2ª Classe',
+  'Agente 3ª Classe',
+  'Agente Probatório',
+];
+
 export const ChefiaDAP = () => {
   const { isAdmin, isLoading: authLoading } = useAuth();
   const [canReset, setCanReset] = useState(false);
   
   // Data
   const [policiais, setPoliciais] = useState<Police[]>([]);
-  const [patrols, setPatrols] = useState<Patrol[]>([]);
   const [seizures, setSeizures] = useState<Seizure[]>([]);
-  const [horasData, setHorasData] = useState<Record<string, number>>({});
   const [seizureData, setSeizureData] = useState<{ totals: Record<string, number>; count: number }>({ totals: {}, count: 0 });
   
   // Delete confirmation
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<{ type: 'police' | 'patrol' | 'seizure'; id: string; name: string } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ type: 'police' | 'seizure'; id: string; name: string } | null>(null);
+
+  // Edit modal
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editTarget, setEditTarget] = useState<{ type: 'police' | 'seizure'; data: Police | Seizure } | null>(null);
+  const [editFormData, setEditFormData] = useState<Partial<Police>>({});
+  const [editSeizureFormData, setEditSeizureFormData] = useState<Partial<Seizure>>({});
 
   useEffect(() => {
     if (isAdmin) {
@@ -90,18 +115,8 @@ export const ChefiaDAP = () => {
     const approved = getApprovedPolice();
     setPoliciais(approved);
     
-    const allPolice = getPolice();
-    const allPatrols = getPatrols();
     const allSeizures = getSeizures();
-    
-    setPatrols(allPatrols);
     setSeizures(allSeizures);
-    
-    const horas: Record<string, number> = {};
-    approved.forEach(p => {
-      horas[p.id] = getWeeklyHours(p.id);
-    });
-    setHorasData(horas);
     
     const seizuresData = getWeeklySeizureTotals();
     setSeizureData(seizuresData);
@@ -109,9 +124,6 @@ export const ChefiaDAP = () => {
     setCanReset(wasPdfGenerated());
   };
 
-  const totalHoras = Object.values(horasData).reduce((a, b) => a + b, 0);
-  const policiaisAtivos = policiais.filter(p => horasData[p.id] > 0).length;
-  const mediaHoras = policiais.length > 0 ? totalHoras / policiais.length : 0;
   const totalItensApreendidos = Object.values(seizureData.totals).reduce((a, b) => a + b, 0);
 
   const generatePDF = () => {
@@ -134,27 +146,23 @@ export const ChefiaDAP = () => {
     
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Policiais Ativos: ${policiaisAtivos}`, 14, 52);
-    doc.text(`Total de Horas: ${totalHoras.toFixed(1)}h`, 14, 58);
-    doc.text(`Média por Policial: ${mediaHoras.toFixed(1)}h`, 14, 64);
-    doc.text(`Total de APFs: ${seizureData.count}`, 14, 70);
-    doc.text(`Total de Itens Apreendidos: ${totalItensApreendidos}`, 14, 76);
+    doc.text(`Policiais Cadastrados: ${policiais.length}`, 14, 52);
+    doc.text(`Total de APFs: ${seizureData.count}`, 14, 58);
+    doc.text(`Total de Itens Apreendidos: ${totalItensApreendidos}`, 14, 64);
 
-    // Hours table
+    // Police table
     doc.setFontSize(14);
     doc.setFont('helvetica', 'bold');
-    doc.text('Carga Horária Semanal', 14, 90);
+    doc.text('Policiais Cadastrados', 14, 78);
 
-    const horasTableData = policiais.map(p => {
-      const horas = horasData[p.id] || 0;
-      const status = horas >= 8 ? 'Meta atingida' : 'Abaixo da meta';
-      return [p.nomeCompleto, p.cargo, p.rg, `${horas.toFixed(1)}h`, status];
+    const policeTableData = policiais.map(p => {
+      return [p.nomeCompleto, p.cargo, p.rg];
     });
 
     autoTable(doc, {
-      startY: 95,
-      head: [['Policial', 'Cargo', 'RG', 'Horas', 'Status']],
-      body: horasTableData,
+      startY: 83,
+      head: [['Policial', 'Cargo', 'RG']],
+      body: policeTableData,
       theme: 'striped',
       headStyles: { fillColor: [30, 41, 59] },
       styles: { fontSize: 9 },
@@ -222,7 +230,7 @@ export const ChefiaDAP = () => {
     }
   };
 
-  const openDeleteModal = (type: 'police' | 'patrol' | 'seizure', id: string, name: string) => {
+  const openDeleteModal = (type: 'police' | 'seizure', id: string, name: string) => {
     setDeleteTarget({ type, id, name });
     setShowDeleteModal(true);
   };
@@ -235,9 +243,6 @@ export const ChefiaDAP = () => {
     if (type === 'police') {
       const updated = getPolice().filter(p => p.id !== id);
       savePolice(updated);
-    } else if (type === 'patrol') {
-      const updated = getPatrols().filter(p => p.id !== id);
-      savePatrols(updated);
     } else if (type === 'seizure') {
       const updated = getSeizures().filter(s => s.id !== id);
       saveSeizures(updated);
@@ -247,6 +252,42 @@ export const ChefiaDAP = () => {
     setDeleteTarget(null);
     loadData();
     toast.success('Registro excluído com sucesso!');
+  };
+
+  const openEditModal = (type: 'police' | 'seizure', data: Police | Seizure) => {
+    setEditTarget({ type, data });
+    if (type === 'police') {
+      setEditFormData(data as Police);
+    } else {
+      setEditSeizureFormData(data as Seizure);
+    }
+    setShowEditModal(true);
+  };
+
+  const confirmEdit = () => {
+    if (!editTarget) return;
+
+    const { type, data } = editTarget;
+
+    if (type === 'police') {
+      const updated = getPolice().map(p => 
+        p.id === data.id ? { ...p, ...editFormData } : p
+      );
+      savePolice(updated);
+      toast.success('Policial atualizado com sucesso!');
+    } else if (type === 'seizure') {
+      const updated = getSeizures().map(s => 
+        s.id === data.id ? { ...s, ...editSeizureFormData } : s
+      );
+      saveSeizures(updated);
+      toast.success('APF atualizado com sucesso!');
+    }
+
+    setShowEditModal(false);
+    setEditTarget(null);
+    setEditFormData({});
+    setEditSeizureFormData({});
+    loadData();
   };
 
   const formatDate = (dateString: string) => {
@@ -376,69 +417,20 @@ export const ChefiaDAP = () => {
                           {p.status === 'approved' ? 'Aprovado' : p.status === 'rejected' ? 'Rejeitado' : 'Pendente'}
                         </span>
                       </td>
-                      <td className="p-3 text-center">
+                      <td className="p-3 text-center flex gap-2 justify-center">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => openEditModal('police', p)}
+                          className="gap-1"
+                        >
+                          <Pencil className="w-3 h-3" />
+                          Editar
+                        </Button>
                         <Button
                           size="sm"
                           variant="destructive"
                           onClick={() => openDeleteModal('police', p.id, p.nomeCompleto)}
-                          className="gap-1"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                          Excluir
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Patrulhamentos */}
-          <div className="tactical-card overflow-hidden">
-            <div className="p-4 border-b border-tactical-border flex items-center gap-2">
-              <Car className="w-5 h-5 text-primary" />
-              <h3 className="font-semibold">Patrulhamentos</h3>
-              <span className="ml-auto text-sm text-muted-foreground">
-                {getPatrols().length} registros
-              </span>
-            </div>
-            <div className="overflow-x-auto max-h-[300px] overflow-y-auto">
-              <table className="w-full">
-                <thead className="sticky top-0 bg-card">
-                  <tr className="border-b border-tactical-border bg-muted/30">
-                    <th className="text-left p-3 font-medium text-muted-foreground">Unidade</th>
-                    <th className="text-left p-3 font-medium text-muted-foreground">Assinatura</th>
-                    <th className="text-left p-3 font-medium text-muted-foreground">Horas</th>
-                    <th className="text-left p-3 font-medium text-muted-foreground">Status</th>
-                    <th className="text-left p-3 font-medium text-muted-foreground">Data</th>
-                    <th className="text-center p-3 font-medium text-muted-foreground">Ações</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {getPatrols().map(p => (
-                    <tr key={p.id} className="border-b border-tactical-border tactical-row">
-                      <td className="p-3 font-medium">Unidade {p.unidade}</td>
-                      <td className="p-3 text-muted-foreground">{p.assinatura}</td>
-                      <td className="p-3 font-mono">{p.horasTrabalhadas?.toFixed(2) || '-'}h</td>
-                      <td className="p-3">
-                        <span className={`px-2 py-1 rounded text-xs ${
-                          p.status === 'approved' ? 'bg-success/20 text-success' :
-                          p.status === 'rejected' ? 'bg-destructive/20 text-destructive' :
-                          p.status === 'active' ? 'bg-primary/20 text-primary' :
-                          'bg-warning/20 text-warning'
-                        }`}>
-                          {p.status === 'approved' ? 'Aprovado' : 
-                           p.status === 'rejected' ? 'Rejeitado' : 
-                           p.status === 'active' ? 'Em andamento' : 'Pendente'}
-                        </span>
-                      </td>
-                      <td className="p-3 text-sm text-muted-foreground">{formatDate(p.inicioTimestamp)}</td>
-                      <td className="p-3 text-center">
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => openDeleteModal('patrol', p.id, `Unidade ${p.unidade}`)}
                           className="gap-1"
                         >
                           <Trash2 className="w-3 h-3" />
@@ -466,6 +458,7 @@ export const ChefiaDAP = () => {
                 <thead className="sticky top-0 bg-card">
                   <tr className="border-b border-tactical-border bg-muted/30">
                     <th className="text-left p-3 font-medium text-muted-foreground">Policial</th>
+                    <th className="text-left p-3 font-medium text-muted-foreground">Indivíduo</th>
                     <th className="text-left p-3 font-medium text-muted-foreground">Itens</th>
                     <th className="text-left p-3 font-medium text-muted-foreground">Status</th>
                     <th className="text-left p-3 font-medium text-muted-foreground">Data</th>
@@ -478,6 +471,7 @@ export const ChefiaDAP = () => {
                     return (
                       <tr key={s.id} className="border-b border-tactical-border tactical-row">
                         <td className="p-3 font-medium">{s.policialNome}</td>
+                        <td className="p-3 text-muted-foreground">{s.nomeIndividuo || '-'}</td>
                         <td className="p-3 font-mono">{totalItens}</td>
                         <td className="p-3">
                           <span className={`px-2 py-1 rounded text-xs ${
@@ -489,7 +483,16 @@ export const ChefiaDAP = () => {
                           </span>
                         </td>
                         <td className="p-3 text-sm text-muted-foreground">{formatDate(s.createdAt)}</td>
-                        <td className="p-3 text-center">
+                        <td className="p-3 text-center flex gap-2 justify-center">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => openEditModal('seizure', s)}
+                            className="gap-1"
+                          >
+                            <Pencil className="w-3 h-3" />
+                            Editar
+                          </Button>
                           <Button
                             size="sm"
                             variant="destructive"
@@ -540,6 +543,125 @@ export const ChefiaDAP = () => {
             >
               <Trash2 className="w-4 h-4" />
               Excluir
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Modal */}
+      <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
+        <DialogContent className="bg-card border-tactical-border max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Pencil className="w-5 h-5 text-primary" />
+              Editar {editTarget?.type === 'police' ? 'Policial' : 'APF'}
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="py-4 space-y-4">
+            {editTarget?.type === 'police' && (
+              <>
+                <div>
+                  <Label className="mb-2 block">Nome Completo</Label>
+                  <Input
+                    value={editFormData.nomeCompleto || ''}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, nomeCompleto: e.target.value }))}
+                    className="bg-input border-tactical-border"
+                  />
+                </div>
+                <div>
+                  <Label className="mb-2 block">RG</Label>
+                  <Input
+                    value={editFormData.rg || ''}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, rg: e.target.value.replace(/\D/g, '') }))}
+                    className="bg-input border-tactical-border font-mono"
+                  />
+                </div>
+                <div>
+                  <Label className="mb-2 block">Cargo</Label>
+                  <Select 
+                    value={editFormData.cargo || ''} 
+                    onValueChange={(value) => setEditFormData(prev => ({ ...prev, cargo: value }))}
+                  >
+                    <SelectTrigger className="bg-input border-tactical-border">
+                      <SelectValue placeholder="Selecione o cargo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ALL_CARGOS.map(c => (
+                        <SelectItem key={c} value={c}>
+                          {c}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="mb-2 block">Status</Label>
+                  <Select 
+                    value={editFormData.status || 'pending'} 
+                    onValueChange={(value: 'pending' | 'approved' | 'rejected') => setEditFormData(prev => ({ ...prev, status: value }))}
+                  >
+                    <SelectTrigger className="bg-input border-tactical-border">
+                      <SelectValue placeholder="Selecione o status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="pending">Pendente</SelectItem>
+                      <SelectItem value="approved">Aprovado</SelectItem>
+                      <SelectItem value="rejected">Rejeitado</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            )}
+
+            {editTarget?.type === 'seizure' && (
+              <>
+                <div>
+                  <Label className="mb-2 block">Nome do Indivíduo</Label>
+                  <Input
+                    value={editSeizureFormData.nomeIndividuo || ''}
+                    onChange={(e) => setEditSeizureFormData(prev => ({ ...prev, nomeIndividuo: e.target.value }))}
+                    className="bg-input border-tactical-border"
+                  />
+                </div>
+                <div>
+                  <Label className="mb-2 block">RG do Indivíduo</Label>
+                  <Input
+                    value={editSeizureFormData.rgIndividuo || ''}
+                    onChange={(e) => setEditSeizureFormData(prev => ({ ...prev, rgIndividuo: e.target.value.replace(/\D/g, '') }))}
+                    className="bg-input border-tactical-border font-mono"
+                  />
+                </div>
+                <div>
+                  <Label className="mb-2 block">Status</Label>
+                  <Select 
+                    value={editSeizureFormData.status || 'pending'} 
+                    onValueChange={(value: 'pending' | 'approved' | 'rejected') => setEditSeizureFormData(prev => ({ ...prev, status: value }))}
+                  >
+                    <SelectTrigger className="bg-input border-tactical-border">
+                      <SelectValue placeholder="Selecione o status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="pending">Pendente</SelectItem>
+                      <SelectItem value="approved">Aprovado</SelectItem>
+                      <SelectItem value="rejected">Rejeitado</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEditModal(false)}>
+              Cancelar
+            </Button>
+            <Button 
+              onClick={confirmEdit}
+              className="gap-2"
+            >
+              <Pencil className="w-4 h-4" />
+              Salvar
             </Button>
           </DialogFooter>
         </DialogContent>

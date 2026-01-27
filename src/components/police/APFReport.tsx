@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Police, Seizure, ARTIGOS_PENAIS } from '@/types/police';
-import { getApprovedPolice, getPoliciesOnDuty, addSeizure } from '@/lib/storage';
+import { getApprovedPolice, addSeizure } from '@/lib/storage';
 import { isValidUrl } from '@/lib/urlValidator';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,7 +14,7 @@ import {
   SelectTrigger, 
   SelectValue 
 } from '@/components/ui/select';
-import { FileText, Send, AlertTriangle, Camera, Clock, User, Scale } from 'lucide-react';
+import { FileText, Send, Camera, Clock, User, Scale } from 'lucide-react';
 import { toast } from 'sonner';
 
 const ITENS_LABELS = {
@@ -63,7 +63,6 @@ const defaultItens = {
 
 export const APFReport = () => {
   const [policiais, setPoliciais] = useState<Police[]>([]);
-  const [policiaisEmServico, setPoliciaisEmServico] = useState<string[]>([]);
   const [selectedPolicial, setSelectedPolicial] = useState<string>('');
   
   // Novos campos
@@ -82,9 +81,7 @@ export const APFReport = () => {
 
   const loadData = () => {
     const approved = getApprovedPolice();
-    const onDuty = getPoliciesOnDuty();
     setPoliciais(approved);
-    setPoliciaisEmServico(onDuty);
   };
 
   const handleItemChange = (key: string, value: string) => {
@@ -210,10 +207,6 @@ export const APFReport = () => {
     toast.success('APF enviado para aprovação!');
   };
 
-  const policiaisDisponiveis = policiais.filter(p => 
-    policiaisEmServico.includes(p.id)
-  );
-
   const tempoPrisao = calcularTempoPrisao();
 
   // Verificar se algum artigo único está selecionado
@@ -228,17 +221,17 @@ export const APFReport = () => {
           <FileText className="w-6 h-6 text-primary" />
         </div>
         <div>
-          <h2 className="text-xl font-semibold">Auto de Prisão em Flagrante (APF)</h2>
+      <h2 className="text-xl font-semibold">Auto de Prisão em Flagrante (APF)</h2>
           <p className="text-sm text-muted-foreground">Registre prisões e apreensões em operações</p>
         </div>
       </div>
 
-      {policiaisDisponiveis.length === 0 && (
+      {policiais.length === 0 && (
         <div className="tactical-card p-4 border-l-4 border-l-warning">
           <div className="flex items-center gap-3">
-            <AlertTriangle className="w-5 h-5 text-warning" />
+            <User className="w-5 h-5 text-warning" />
             <p className="text-sm">
-              Nenhum policial em serviço. Inicie um patrulhamento primeiro.
+              Nenhum policial cadastrado. Cadastre um policial primeiro.
             </p>
           </div>
         </div>
@@ -247,14 +240,14 @@ export const APFReport = () => {
       {/* Policial Responsável */}
       <div className="tactical-card p-6">
         <Label className="text-base font-medium mb-4 block">
-          Policial Responsável (em serviço)
+          Policial Responsável
         </Label>
         <Select value={selectedPolicial} onValueChange={setSelectedPolicial}>
           <SelectTrigger className="bg-input border-tactical-border">
             <SelectValue placeholder="Selecione o policial" />
           </SelectTrigger>
           <SelectContent>
-            {policiaisDisponiveis.map(p => (
+            {policiais.map(p => (
               <SelectItem key={p.id} value={p.id}>
                 {p.nomeCompleto} - {p.cargo}
               </SelectItem>

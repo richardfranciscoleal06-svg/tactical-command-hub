@@ -1,17 +1,9 @@
 import { useState } from 'react';
-import { CARGOS, CURSOS, Police } from '@/types/police';
+import { Police } from '@/types/police';
 import { addPolice } from '@/lib/storage';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
-} from '@/components/ui/select';
 import { UserPlus, BadgeCheck, Calendar, Hash } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -19,25 +11,10 @@ export const PoliceRegistration = () => {
   const [nomeCompleto, setNomeCompleto] = useState('');
   const [rg, setRg] = useState('');
   const [dataIngresso, setDataIngresso] = useState('');
-  const [cargo, setCargo] = useState('');
-  const [cursos, setCursos] = useState<string[]>([]);
 
   const handleRgChange = (value: string) => {
     const numbersOnly = value.replace(/\D/g, '');
     setRg(numbersOnly);
-  };
-
-  const handleCursoToggle = (curso: string) => {
-    if (curso === 'Nenhum') {
-      setCursos(['Nenhum']);
-    } else {
-      setCursos(prev => {
-        const filtered = prev.filter(c => c !== 'Nenhum');
-        return filtered.includes(curso)
-          ? filtered.filter(c => c !== curso)
-          : [...filtered, curso];
-      });
-    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -55,22 +32,14 @@ export const PoliceRegistration = () => {
       toast.error('Data de ingresso é obrigatória');
       return;
     }
-    if (!cargo) {
-      toast.error('Cargo/Hierarquia é obrigatório');
-      return;
-    }
-    if (cursos.length === 0) {
-      toast.error('Selecione ao menos um curso ou "Nenhum"');
-      return;
-    }
 
     const police: Police = {
       id: crypto.randomUUID(),
       nomeCompleto: nomeCompleto.trim(),
       rg,
       dataIngresso,
-      cargo,
-      cursos,
+      cargo: 'Agente Probatório',
+      cursos: [],
       status: 'pending',
       createdAt: new Date().toISOString(),
     };
@@ -81,8 +50,6 @@ export const PoliceRegistration = () => {
     setNomeCompleto('');
     setRg('');
     setDataIngresso('');
-    setCargo('');
-    setCursos([]);
 
     toast.success('Cadastro enviado para aprovação!');
   };
@@ -143,45 +110,12 @@ export const PoliceRegistration = () => {
         </div>
 
         <div className="tactical-card p-6">
-          <Label className="text-base font-medium mb-4 block">
-            Hierarquia (Cargo)
+          <Label className="text-base font-medium mb-2 block">
+            Cargo
           </Label>
-          <Select value={cargo} onValueChange={setCargo}>
-            <SelectTrigger className="bg-input border-tactical-border">
-              <SelectValue placeholder="Selecione o cargo" />
-            </SelectTrigger>
-            <SelectContent className="max-h-[300px]">
-              {CARGOS.map(c => (
-                <SelectItem key={c} value={c}>
-                  {c}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="tactical-card p-6">
-          <Label className="text-base font-medium mb-4 block">
-            Cursos
-          </Label>
-          <div className="space-y-3">
-            {CURSOS.map(curso => (
-              <label 
-                key={curso}
-                className={`flex items-center gap-3 p-3 rounded-lg border transition-all cursor-pointer ${
-                  cursos.includes(curso)
-                    ? 'border-primary bg-primary/10'
-                    : 'border-tactical-border hover:border-primary/50'
-                }`}
-              >
-                <Checkbox 
-                  checked={cursos.includes(curso)}
-                  onCheckedChange={() => handleCursoToggle(curso)}
-                />
-                <span className="font-medium">{curso}</span>
-              </label>
-            ))}
-          </div>
+          <p className="text-sm text-muted-foreground p-3 bg-muted/30 rounded-lg border border-tactical-border">
+            Agente Probatório
+          </p>
         </div>
 
         <Button type="submit" className="w-full h-12 gap-2">

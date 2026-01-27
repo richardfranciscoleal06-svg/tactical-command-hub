@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { TabType } from '@/types/police';
 import { Header } from '@/components/police/Header';
 import { Navigation } from '@/components/police/Navigation';
-import { PatrolReport } from '@/components/police/PatrolReport';
 import { APFReport } from '@/components/police/APFReport';
 import { PoliceRegistration } from '@/components/police/PoliceRegistration';
 import { AdminDashboard } from '@/components/police/AdminDashboard';
@@ -11,12 +10,10 @@ import { ChefiaDAP } from '@/components/police/ChefiaDAP';
 import UserApproval from '@/pages/UserApproval';
 
 const Index = () => {
-  const [activeTab, setActiveTab] = useState<TabType>('patrulhamento');
+  const [activeTab, setActiveTab] = useState<TabType>('apf');
 
   const renderContent = () => {
     switch (activeTab) {
-      case 'patrulhamento':
-        return <PatrolReport />;
       case 'apf':
         return <APFReport />;
       case 'cadastro':
@@ -30,7 +27,7 @@ const Index = () => {
       case 'usuarios':
         return <UserApproval />;
       default:
-        return <PatrolReport />;
+        return <APFReport />;
     }
   };
 
