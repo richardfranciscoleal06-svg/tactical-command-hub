@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { 
   Dialog,
   DialogContent,
@@ -12,15 +11,17 @@ import {
 } from '@/components/ui/dialog';
 import { 
   Lock, 
-  Unlock, 
   Check, 
   X, 
   Users,
   FileText,
   ExternalLink,
-  Loader2
+  Loader2,
+  ShieldAlert
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { Navigate } from 'react-router-dom';
+import { logger } from '@/lib/logger';
 
 interface PendingUser {
   id: string;
@@ -31,13 +32,11 @@ interface PendingUser {
   created_at: string;
 }
 
-const SENHA_SETOR_ADMIN = '281106';
-
 export const UserApproval = () => {
-  const [isLocked, setIsLocked] = useState(true);
-  const [senha, setSenha] = useState('');
+  const { isAdmin, isLoading: authLoading } = useAuth();
   const [pendingUsers, setPendingUsers] = useState<PendingUser[]>([]);
   const [loading, setLoading] = useState(false);
+  const [proofUrls, setProofUrls] = useState<Record<string, string>>({});
   
   // Modal
   const [showModal, setShowModal] = useState(false);
@@ -55,31 +54,34 @@ export const UserApproval = () => {
       .order('created_at', { ascending: false });
 
     if (error) {
-      console.error('Error loading pending users:', error);
+      logger.error('Error loading pending users:', error);
       toast.error('Erro ao carregar usuários pendentes');
     } else {
       setPendingUsers(data || []);
+      
+      // Generate signed URLs for proof files
+      const urls: Record<string, string> = {};
+      for (const user of data || []) {
+        if (user.proof_url) {
+          const { data: signedData } = await supabase.storage
+            .from('proofs')
+            .createSignedUrl(user.proof_url, 3600);
+          if (signedData?.signedUrl) {
+            urls[user.id] = signedData.signedUrl;
+          }
+        }
+      }
+      setProofUrls(urls);
     }
     
     setLoading(false);
   };
 
   useEffect(() => {
-    if (!isLocked) {
+    if (isAdmin) {
       loadPendingUsers();
     }
-  }, [isLocked]);
-
-  const handleUnlock = () => {
-    if (senha === SENHA_SETOR_ADMIN) {
-      setIsLocked(false);
-      setSenha('');
-      toast.success('Acesso liberado');
-    } else {
-      toast.error('Senha incorreta');
-      setSenha('');
-    }
-  };
+  }, [isAdmin]);
 
   const openModal = (user: PendingUser, actionType: 'approve' | 'reject') => {
     setSelectedUser(user);
@@ -100,7 +102,7 @@ export const UserApproval = () => {
       .eq('id', selectedUser.id);
 
     if (error) {
-      console.error('Error updating user status:', error);
+      logger.error('Error updating user status:', error);
       toast.error('Erro ao atualizar status');
     } else {
       toast.success(action === 'approve' ? 'Usuário aprovado!' : 'Usuário rejeitado');
@@ -116,35 +118,29 @@ export const UserApproval = () => {
     return new Date(dateString).toLocaleString('pt-BR');
   };
 
-  if (isLocked) {
+  // Show loading while checking auth
+  if (authLoading) {
+    return (
+      <div className="tactical-card p-8 text-center">
+        <Loader2 className="w-8 h-8 animate-spin mx-auto text-primary" />
+        <p className="text-muted-foreground mt-2">Verificando permissões...</p>
+      </div>
+    );
+  }
+
+  // Redirect if not admin
+  if (!isAdmin) {
     return (
       <div className="tactical-card p-8 w-full max-w-md mx-auto">
         <div className="text-center mb-6">
-          <div className="p-4 rounded-full bg-primary/10 inline-block mb-4">
-            <Lock className="w-12 h-12 text-primary" />
+          <div className="p-4 rounded-full bg-destructive/10 inline-block mb-4">
+            <ShieldAlert className="w-12 h-12 text-destructive" />
           </div>
-          <h2 className="text-xl font-semibold">Aprovação de Usuários</h2>
+          <h2 className="text-xl font-semibold">Acesso Negado</h2>
           <p className="text-sm text-muted-foreground mt-2">
-            Área restrita. Digite a senha do setor admin para acessar.
+            Você não tem permissão para acessar esta área.
+            Apenas administradores podem aprovar usuários.
           </p>
-        </div>
-
-        <div className="space-y-4">
-          <div>
-            <Label>Senha do Setor Admin</Label>
-            <Input
-              type="password"
-              value={senha}
-              onChange={(e) => setSenha(e.target.value)}
-              placeholder="••••••"
-              className="mt-1.5 bg-input border-tactical-border text-center font-mono text-lg tracking-widest"
-              onKeyDown={(e) => e.key === 'Enter' && handleUnlock()}
-            />
-          </div>
-          <Button onClick={handleUnlock} className="w-full gap-2">
-            <Unlock className="w-4 h-4" />
-            Desbloquear
-          </Button>
         </div>
       </div>
     );
@@ -164,14 +160,10 @@ export const UserApproval = () => {
             </p>
           </div>
         </div>
-        <Button 
-          variant="outline" 
-          onClick={() => setIsLocked(true)}
-          className="gap-2"
-        >
-          <Lock className="w-4 h-4" />
-          Bloquear
-        </Button>
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-success/10 border border-success/30">
+          <Lock className="w-4 h-4 text-success" />
+          <span className="text-sm text-success font-medium">Admin</span>
+        </div>
       </div>
 
       {loading ? (
@@ -198,9 +190,9 @@ export const UserApproval = () => {
                   </div>
                   
                   <div className="flex items-center gap-4 mt-3">
-                    {user.proof_url && (
+                    {proofUrls[user.id] && (
                       <a 
-                        href={user.proof_url} 
+                        href={proofUrls[user.id]} 
                         target="_blank" 
                         rel="noopener noreferrer"
                         className="text-sm text-primary hover:underline flex items-center gap-1"
