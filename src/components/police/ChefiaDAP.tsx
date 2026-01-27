@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
 import { Police, Patrol, Seizure } from '@/types/police';
 import { 
   getApprovedPolice, 
@@ -15,8 +16,6 @@ import {
   saveSeizures,
 } from '@/lib/storage';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   Dialog,
@@ -28,23 +27,21 @@ import {
 import { 
   Crown, 
   Lock, 
-  Unlock,
   FileDown, 
   RotateCcw,
   AlertTriangle,
   Check,
   Database,
   Trash2,
-  Edit,
   Users,
   Car,
-  FileText
+  FileText,
+  ShieldAlert,
+  Loader2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-
-const SENHA_CHEFIA = 'Richard28@@2006';
 
 const ITEM_LABELS: Record<string, string> = {
   sementeCannabis: 'Semente de Cannabis',
@@ -69,8 +66,7 @@ const ITEM_LABELS: Record<string, string> = {
 };
 
 export const ChefiaDAP = () => {
-  const [isLocked, setIsLocked] = useState(true);
-  const [senha, setSenha] = useState('');
+  const { isAdmin, isLoading: authLoading } = useAuth();
   const [canReset, setCanReset] = useState(false);
   
   // Data
@@ -85,10 +81,10 @@ export const ChefiaDAP = () => {
   const [deleteTarget, setDeleteTarget] = useState<{ type: 'police' | 'patrol' | 'seizure'; id: string; name: string } | null>(null);
 
   useEffect(() => {
-    if (!isLocked) {
+    if (isAdmin) {
       loadData();
     }
-  }, [isLocked]);
+  }, [isAdmin]);
 
   const loadData = () => {
     const approved = getApprovedPolice();
@@ -111,17 +107,6 @@ export const ChefiaDAP = () => {
     setSeizureData(seizuresData);
     
     setCanReset(wasPdfGenerated());
-  };
-
-  const handleUnlock = () => {
-    if (senha === SENHA_CHEFIA) {
-      setIsLocked(false);
-      setSenha('');
-      toast.success('Acesso à Chefia DAP liberado');
-    } else {
-      toast.error('Senha incorreta');
-      setSenha('');
-    }
   };
 
   const totalHoras = Object.values(horasData).reduce((a, b) => a + b, 0);
@@ -268,36 +253,32 @@ export const ChefiaDAP = () => {
     return new Date(dateString).toLocaleString('pt-BR');
   };
 
-  if (isLocked) {
+  // Show loading while checking auth
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px] animate-fade-in">
+        <div className="tactical-card p-8 text-center">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto text-primary" />
+          <p className="text-muted-foreground mt-2">Verificando permissões...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show access denied if not admin
+  if (!isAdmin) {
     return (
       <div className="flex items-center justify-center min-h-[400px] animate-fade-in">
         <div className="tactical-card p-8 w-full max-w-md">
           <div className="text-center mb-6">
-            <div className="p-4 rounded-full bg-warning/10 inline-block mb-4">
-              <Crown className="w-12 h-12 text-warning" />
+            <div className="p-4 rounded-full bg-destructive/10 inline-block mb-4">
+              <ShieldAlert className="w-12 h-12 text-destructive" />
             </div>
-            <h2 className="text-xl font-semibold">Chefia DAP</h2>
+            <h2 className="text-xl font-semibold">Acesso Negado</h2>
             <p className="text-sm text-muted-foreground mt-2">
-              Área restrita à chefia. Digite a senha para acessar.
+              Você não tem permissão para acessar a Chefia DAP.
+              Apenas administradores podem acessar esta área.
             </p>
-          </div>
-
-          <div className="space-y-4">
-            <div>
-              <Label>Senha da Chefia</Label>
-              <Input
-                type="password"
-                value={senha}
-                onChange={(e) => setSenha(e.target.value)}
-                placeholder="••••••••••"
-                className="mt-1.5 bg-input border-tactical-border text-center font-mono text-lg tracking-widest"
-                onKeyDown={(e) => e.key === 'Enter' && handleUnlock()}
-              />
-            </div>
-            <Button onClick={handleUnlock} className="w-full gap-2">
-              <Unlock className="w-4 h-4" />
-              Acessar Chefia DAP
-            </Button>
           </div>
         </div>
       </div>
@@ -330,14 +311,10 @@ export const ChefiaDAP = () => {
             <RotateCcw className="w-4 h-4" />
             Resetar
           </Button>
-          <Button 
-            variant="outline" 
-            onClick={() => setIsLocked(true)}
-            className="gap-2"
-          >
-            <Lock className="w-4 h-4" />
-            Bloquear
-          </Button>
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-success/10 border border-success/30">
+            <Lock className="w-4 h-4 text-success" />
+            <span className="text-sm text-success font-medium">Admin</span>
+          </div>
         </div>
       </div>
 
@@ -475,11 +452,11 @@ export const ChefiaDAP = () => {
             </div>
           </div>
 
-          {/* APFs/Seizures */}
+          {/* APFs */}
           <div className="tactical-card overflow-hidden">
             <div className="p-4 border-b border-tactical-border flex items-center gap-2">
               <FileText className="w-5 h-5 text-primary" />
-              <h3 className="font-semibold">APFs (Autos de Prisão em Flagrante)</h3>
+              <h3 className="font-semibold">APFs (Apreensões)</h3>
               <span className="ml-auto text-sm text-muted-foreground">
                 {getSeizures().length} registros
               </span>
@@ -489,42 +466,43 @@ export const ChefiaDAP = () => {
                 <thead className="sticky top-0 bg-card">
                   <tr className="border-b border-tactical-border bg-muted/30">
                     <th className="text-left p-3 font-medium text-muted-foreground">Policial</th>
-                    <th className="text-left p-3 font-medium text-muted-foreground">Indivíduo</th>
-                    <th className="text-left p-3 font-medium text-muted-foreground">Tempo Prisão</th>
+                    <th className="text-left p-3 font-medium text-muted-foreground">Itens</th>
                     <th className="text-left p-3 font-medium text-muted-foreground">Status</th>
                     <th className="text-left p-3 font-medium text-muted-foreground">Data</th>
                     <th className="text-center p-3 font-medium text-muted-foreground">Ações</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {getSeizures().map(s => (
-                    <tr key={s.id} className="border-b border-tactical-border tactical-row">
-                      <td className="p-3 font-medium">{s.policialNome}</td>
-                      <td className="p-3 text-muted-foreground">{s.nomeIndividuo || '-'}</td>
-                      <td className="p-3 font-mono">{s.tempoPrisao ? `${s.tempoPrisao}min` : '-'}</td>
-                      <td className="p-3">
-                        <span className={`px-2 py-1 rounded text-xs ${
-                          s.status === 'approved' ? 'bg-success/20 text-success' :
-                          s.status === 'rejected' ? 'bg-destructive/20 text-destructive' :
-                          'bg-warning/20 text-warning'
-                        }`}>
-                          {s.status === 'approved' ? 'Aprovado' : s.status === 'rejected' ? 'Rejeitado' : 'Pendente'}
-                        </span>
-                      </td>
-                      <td className="p-3 text-sm text-muted-foreground">{formatDate(s.createdAt)}</td>
-                      <td className="p-3 text-center">
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => openDeleteModal('seizure', s.id, `APF de ${s.policialNome}`)}
-                          className="gap-1"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                          Excluir
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
+                  {getSeizures().map(s => {
+                    const totalItens = Object.values(s.itens).reduce((a, b) => a + b, 0);
+                    return (
+                      <tr key={s.id} className="border-b border-tactical-border tactical-row">
+                        <td className="p-3 font-medium">{s.policialNome}</td>
+                        <td className="p-3 font-mono">{totalItens}</td>
+                        <td className="p-3">
+                          <span className={`px-2 py-1 rounded text-xs ${
+                            s.status === 'approved' ? 'bg-success/20 text-success' :
+                            s.status === 'rejected' ? 'bg-destructive/20 text-destructive' :
+                            'bg-warning/20 text-warning'
+                          }`}>
+                            {s.status === 'approved' ? 'Aprovado' : s.status === 'rejected' ? 'Rejeitado' : 'Pendente'}
+                          </span>
+                        </td>
+                        <td className="p-3 text-sm text-muted-foreground">{formatDate(s.createdAt)}</td>
+                        <td className="p-3 text-center">
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => openDeleteModal('seizure', s.id, `APF de ${s.policialNome}`)}
+                            className="gap-1"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            Excluir
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -541,19 +519,25 @@ export const ChefiaDAP = () => {
               Confirmar Exclusão
             </DialogTitle>
           </DialogHeader>
+
           <div className="py-4">
             <p className="text-muted-foreground">
-              Tem certeza que deseja excluir <strong className="text-foreground">{deleteTarget?.name}</strong>?
+              Tem certeza que deseja excluir <strong>{deleteTarget?.name}</strong>?
             </p>
             <p className="text-sm text-destructive mt-2">
               Esta ação não pode ser desfeita.
             </p>
           </div>
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowDeleteModal(false)}>
               Cancelar
             </Button>
-            <Button variant="destructive" onClick={confirmDelete} className="gap-2">
+            <Button 
+              variant="destructive"
+              onClick={confirmDelete}
+              className="gap-2"
+            >
               <Trash2 className="w-4 h-4" />
               Excluir
             </Button>

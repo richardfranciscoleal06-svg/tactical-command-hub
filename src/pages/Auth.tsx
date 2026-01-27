@@ -10,17 +10,21 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Shield, LogIn, UserPlus, Upload, AlertCircle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { z } from 'zod';
+import { logger } from '@/lib/logger';
+
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const ALLOWED_FILE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'application/pdf'];
 
 const loginSchema = z.object({
-  email: z.string().trim().email({ message: 'Email inválido' }),
-  password: z.string().min(6, { message: 'Senha deve ter no mínimo 6 caracteres' }),
+  email: z.string().trim().email({ message: 'Email inválido' }).max(255, { message: 'Email muito longo' }),
+  password: z.string().min(6, { message: 'Senha deve ter no mínimo 6 caracteres' }).max(128, { message: 'Senha muito longa' }),
 });
 
 const registerSchema = z.object({
-  email: z.string().trim().email({ message: 'Email inválido' }),
-  password: z.string().min(6, { message: 'Senha deve ter no mínimo 6 caracteres' }),
-  username: z.string().trim().min(3, { message: 'Usuário deve ter no mínimo 3 caracteres' }),
-  justification: z.string().trim().min(10, { message: 'Justificativa deve ter no mínimo 10 caracteres' }),
+  email: z.string().trim().email({ message: 'Email inválido' }).max(255, { message: 'Email muito longo' }),
+  password: z.string().min(6, { message: 'Senha deve ter no mínimo 6 caracteres' }).max(128, { message: 'Senha muito longa' }),
+  username: z.string().trim().min(3, { message: 'Usuário deve ter no mínimo 3 caracteres' }).max(50, { message: 'Usuário deve ter no máximo 50 caracteres' }),
+  justification: z.string().trim().min(10, { message: 'Justificativa deve ter no mínimo 10 caracteres' }).max(2000, { message: 'Justificativa deve ter no máximo 2000 caracteres' }),
 });
 
 const Auth = () => {
@@ -113,6 +117,17 @@ const Auth = () => {
 
     if (!proofFile) {
       setErrors({ proofFile: 'Arquivo de comprovação é obrigatório' });
+      return;
+    }
+
+    // Validate file size and type
+    if (proofFile.size > MAX_FILE_SIZE) {
+      setErrors({ proofFile: 'Arquivo muito grande. Máximo 10MB.' });
+      return;
+    }
+
+    if (!ALLOWED_FILE_TYPES.includes(proofFile.type)) {
+      setErrors({ proofFile: 'Tipo de arquivo não permitido. Use imagens (JPG, PNG, GIF) ou PDF.' });
       return;
     }
 

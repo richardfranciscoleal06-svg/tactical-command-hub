@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
 import { Police, Patrol, Seizure, AuditLog } from '@/types/police';
 import { 
   getPolice, updatePolice,
@@ -34,15 +35,14 @@ import {
   Package, 
   UserPlus,
   History,
-  Filter
+  Filter,
+  ShieldAlert,
+  Loader2
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-const SENHA_MESTRE = '281106';
-
 export const AdminSector = () => {
-  const [isLocked, setIsLocked] = useState(true);
-  const [senha, setSenha] = useState('');
+  const { isAdmin, isLoading: authLoading } = useAuth();
   
   // Data
   const [pendingPolice, setPendingPolice] = useState<Police[]>([]);
@@ -63,27 +63,16 @@ export const AdminSector = () => {
   const [oficialRg, setOficialRg] = useState('');
 
   useEffect(() => {
-    if (!isLocked) {
+    if (isAdmin) {
       loadData();
     }
-  }, [isLocked]);
+  }, [isAdmin]);
 
   const loadData = () => {
     setPendingPolice(getPolice().filter(p => p.status === 'pending'));
     setPendingPatrols(getPatrols().filter(p => p.status === 'pending'));
     setPendingSeizures(getSeizures().filter(s => s.status === 'pending'));
     setLogs(getLogs());
-  };
-
-  const handleUnlock = () => {
-    if (senha === SENHA_MESTRE) {
-      setIsLocked(false);
-      setSenha('');
-      toast.success('Acesso liberado');
-    } else {
-      toast.error('Senha incorreta');
-      setSenha('');
-    }
   };
 
   const openApprovalModal = (
@@ -149,36 +138,32 @@ export const AdminSector = () => {
     ? logs 
     : logs.filter(l => l.oficialResponsavel === filterOficial);
 
-  if (isLocked) {
+  // Show loading while checking auth
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px] animate-fade-in">
+        <div className="tactical-card p-8 text-center">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto text-primary" />
+          <p className="text-muted-foreground mt-2">Verificando permissões...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show access denied if not admin
+  if (!isAdmin) {
     return (
       <div className="flex items-center justify-center min-h-[400px] animate-fade-in">
         <div className="tactical-card p-8 w-full max-w-md">
           <div className="text-center mb-6">
-            <div className="p-4 rounded-full bg-primary/10 inline-block mb-4">
-              <Lock className="w-12 h-12 text-primary" />
+            <div className="p-4 rounded-full bg-destructive/10 inline-block mb-4">
+              <ShieldAlert className="w-12 h-12 text-destructive" />
             </div>
-            <h2 className="text-xl font-semibold">Setor Administrativo</h2>
+            <h2 className="text-xl font-semibold">Acesso Negado</h2>
             <p className="text-sm text-muted-foreground mt-2">
-              Área restrita. Digite a senha mestre para acessar.
+              Você não tem permissão para acessar o Setor Administrativo.
+              Apenas administradores podem acessar esta área.
             </p>
-          </div>
-
-          <div className="space-y-4">
-            <div>
-              <Label>Senha Mestre</Label>
-              <Input
-                type="password"
-                value={senha}
-                onChange={(e) => setSenha(e.target.value)}
-                placeholder="••••••"
-                className="mt-1.5 bg-input border-tactical-border text-center font-mono text-lg tracking-widest"
-                onKeyDown={(e) => e.key === 'Enter' && handleUnlock()}
-              />
-            </div>
-            <Button onClick={handleUnlock} className="w-full gap-2">
-              <Unlock className="w-4 h-4" />
-              Desbloquear
-            </Button>
           </div>
         </div>
       </div>
@@ -197,14 +182,10 @@ export const AdminSector = () => {
             <p className="text-sm text-muted-foreground">Gestão de aprovações e logs</p>
           </div>
         </div>
-        <Button 
-          variant="outline" 
-          onClick={() => setIsLocked(true)}
-          className="gap-2"
-        >
-          <Lock className="w-4 h-4" />
-          Bloquear
-        </Button>
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-success/10 border border-success/30">
+          <Lock className="w-4 h-4 text-success" />
+          <span className="text-sm text-success font-medium">Admin</span>
+        </div>
       </div>
 
       <Tabs defaultValue="patrols" className="space-y-4">
@@ -453,29 +434,26 @@ export const AdminSector = () => {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-tactical-border bg-muted/30">
-                  <th className="text-left p-4 font-medium text-muted-foreground">Oficial Responsável</th>
-                  <th className="text-left p-4 font-medium text-muted-foreground">Ação</th>
-                  <th className="text-left p-4 font-medium text-muted-foreground">Data/Hora</th>
+                  <th className="text-left p-3 font-medium text-muted-foreground">Data/Hora</th>
+                  <th className="text-left p-3 font-medium text-muted-foreground">Oficial</th>
+                  <th className="text-left p-3 font-medium text-muted-foreground">RG</th>
+                  <th className="text-left p-3 font-medium text-muted-foreground">Ação</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredLogs.length === 0 ? (
                   <tr>
-                    <td colSpan={3} className="p-8 text-center text-muted-foreground">
+                    <td colSpan={4} className="p-8 text-center text-muted-foreground">
                       Nenhum log encontrado
                     </td>
                   </tr>
                 ) : (
                   filteredLogs.map(log => (
-                    <tr key={log.id} className="border-b border-tactical-border tactical-row transition-colors">
-                      <td className="p-4">
-                        <p className="font-medium">{log.oficialResponsavel}</p>
-                        <p className="text-xs text-muted-foreground font-mono">RG: {log.oficialRg}</p>
-                      </td>
-                      <td className="p-4 text-muted-foreground">{log.acao}</td>
-                      <td className="p-4 font-mono text-sm text-muted-foreground">
-                        {formatDate(log.dataHora)}
-                      </td>
+                    <tr key={log.id} className="border-b border-tactical-border tactical-row">
+                      <td className="p-3 text-sm">{formatDate(log.dataHora)}</td>
+                      <td className="p-3 font-medium">{log.oficialResponsavel}</td>
+                      <td className="p-3 font-mono text-muted-foreground">{log.oficialRg}</td>
+                      <td className="p-3 text-sm">{log.acao}</td>
                     </tr>
                   ))
                 )}
@@ -495,13 +473,15 @@ export const AdminSector = () => {
               ) : (
                 <X className="w-5 h-5 text-destructive" />
               )}
-              {approvalData?.action === 'approve' ? 'Confirmar Aprovação' : 'Confirmar Rejeição'}
+              {approvalData?.action === 'approve' ? 'Aceitar' : 'Negar'} {approvalData?.description}
             </DialogTitle>
           </DialogHeader>
+
           <div className="space-y-4 py-4">
             <p className="text-sm text-muted-foreground">
-              {approvalData?.description}
+              Preencha os dados do oficial responsável pela {approvalData?.action === 'approve' ? 'aprovação' : 'reprovação'}:
             </p>
+            
             <div>
               <Label>Nome do Oficial</Label>
               <Input
@@ -511,16 +491,18 @@ export const AdminSector = () => {
                 className="mt-1.5 bg-input border-tactical-border"
               />
             </div>
+            
             <div>
               <Label>RG do Oficial</Label>
               <Input
                 value={oficialRg}
-                onChange={(e) => setOficialRg(e.target.value.replace(/\D/g, ''))}
-                placeholder="Somente números"
-                className="mt-1.5 bg-input border-tactical-border font-mono"
+                onChange={(e) => setOficialRg(e.target.value)}
+                placeholder="RG"
+                className="mt-1.5 bg-input border-tactical-border"
               />
             </div>
           </div>
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowApprovalModal(false)}>
               Cancelar
@@ -531,16 +513,11 @@ export const AdminSector = () => {
               className="gap-2"
             >
               {approvalData?.action === 'approve' ? (
-                <>
-                  <Check className="w-4 h-4" />
-                  Confirmar Aprovação
-                </>
+                <Check className="w-4 h-4" />
               ) : (
-                <>
-                  <X className="w-4 h-4" />
-                  Confirmar Rejeição
-                </>
+                <X className="w-4 h-4" />
               )}
+              Confirmar
             </Button>
           </DialogFooter>
         </DialogContent>

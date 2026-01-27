@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
+import { logger } from '@/lib/logger';
 
 type UserStatus = 'pending' | 'approved' | 'rejected' | null;
 
@@ -42,13 +43,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         .maybeSingle();
 
       if (error) {
-        console.error('Error fetching user status:', error);
+        logger.error('Error fetching user status:', error);
         return null;
       }
 
       return profile?.status as UserStatus;
     } catch (error) {
-      console.error('Error in fetchUserStatus:', error);
+      logger.error('Error in fetchUserStatus:', error);
       return null;
     }
   };
@@ -63,13 +64,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         .maybeSingle();
 
       if (error) {
-        console.error('Error fetching admin status:', error);
+        logger.error('Error fetching admin status:', error);
         return false;
       }
 
       return !!data;
     } catch (error) {
-      console.error('Error in fetchIsAdmin:', error);
+      logger.error('Error in fetchIsAdmin:', error);
       return false;
     }
   };
@@ -159,7 +160,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         });
 
       if (profileError) {
-        console.error('Error creating profile:', profileError);
+        logger.error('Error creating profile:', profileError);
         return { error: profileError };
       }
     }
