@@ -27,7 +27,7 @@ export const Header = () => {
               SISTEMA POLICIAL
             </h1>
             <p className="text-sm text-muted-foreground font-mono">
-              DEPARTAMENTO DE ADMINISTRAÇÃO E PLANEJAMENTO DA PCESP
+              DEPARTAMENTO DE ENSINO E CARREIRA DA PCESP
             </p>
           </div>
           <div className="ml-auto flex items-center gap-4">
