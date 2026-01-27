@@ -7,6 +7,7 @@ import {
   getSeizures, updateSeizure,
   getLogs, addLog,
 } from '@/lib/storage';
+import { sanitizeUrl, isValidUrl } from '@/lib/urlValidator';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -320,15 +321,20 @@ export const AdminSector = () => {
                       <p className="text-sm text-muted-foreground mt-2">
                         {totalItens} itens apreendidos
                       </p>
-                      {seizure.urlComprovacao && (
+                      {seizure.urlComprovacao && isValidUrl(seizure.urlComprovacao) && (
                         <a 
-                          href={seizure.urlComprovacao} 
+                          href={sanitizeUrl(seizure.urlComprovacao)} 
                           target="_blank" 
                           rel="noopener noreferrer"
                           className="text-sm text-primary hover:underline"
                         >
                           Ver comprovação
                         </a>
+                      )}
+                      {seizure.urlComprovacao && !isValidUrl(seizure.urlComprovacao) && (
+                        <span className="text-sm text-destructive">
+                          URL de comprovação inválida
+                        </span>
                       )}
                       <p className="text-xs text-muted-foreground mt-1">
                         {formatDate(seizure.createdAt)}
