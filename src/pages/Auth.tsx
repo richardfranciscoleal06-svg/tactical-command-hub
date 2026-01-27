@@ -134,44 +134,74 @@ const Auth = () => {
     setRegisterLoading(true);
     
     try {
-      // Upload proof file
+      // STEP 1: Sign up user FIRST (before file upload)
+      // This creates the user and authenticates them
+      const redirectUrl = `${window.location.origin}/`;
+      
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+        email: registerEmail,
+        password: registerPassword,
+        options: {
+          emailRedirectTo: redirectUrl
+        }
+      });
+
+      if (signUpError) {
+        if (signUpError.message?.includes('already registered')) {
+          toast.error('Este email já está cadastrado');
+        } else {
+          toast.error(signUpError.message || 'Erro ao criar conta');
+        }
+        setRegisterLoading(false);
+        return;
+      }
+
+      if (!signUpData.user) {
+        toast.error('Erro ao criar conta');
+        setRegisterLoading(false);
+        return;
+      }
+
+      const userId = signUpData.user.id;
+
+      // STEP 2: Upload proof file with correct path structure (user_id/filename)
+      // Now the user is authenticated and can upload to their folder
       const fileExt = proofFile.name.split('.').pop();
-      const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+      const fileName = `${userId}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
       
       const { error: uploadError } = await supabase.storage
         .from('proofs')
         .upload(fileName, proofFile);
 
       if (uploadError) {
-        console.error('Upload error:', uploadError);
+        logger.error('Upload error:', uploadError);
         toast.error('Erro ao enviar arquivo de comprovação');
         setRegisterLoading(false);
         return;
       }
 
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('proofs')
-        .getPublicUrl(fileName);
+      // STEP 3: Create profile with pending status
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .insert({
+          user_id: userId,
+          username,
+          justification,
+          proof_url: fileName, // Store the path, not public URL
+          status: 'pending'
+        });
 
-      // Sign up user
-      const { error } = await signUp(
-        registerEmail,
-        registerPassword,
-        username,
-        justification,
-        publicUrl
-      );
-
-      if (error) {
-        if (error.message?.includes('already registered')) {
-          toast.error('Este email já está cadastrado');
-        } else {
-          toast.error(error.message || 'Erro ao criar conta');
-        }
+      if (profileError) {
+        logger.error('Profile error:', profileError);
+        // Cleanup: delete uploaded file if profile creation fails
+        await supabase.storage.from('proofs').remove([fileName]);
+        toast.error('Erro ao criar perfil');
         setRegisterLoading(false);
         return;
       }
+
+      // Sign out the user - they need to wait for approval
+      await supabase.auth.signOut();
 
       toast.success('Cadastro realizado! Aguarde a aprovação do Setor Admin.', {
         duration: 5000,
@@ -185,7 +215,7 @@ const Auth = () => {
       setProofFile(null);
       
     } catch (err) {
-      console.error('Registration error:', err);
+      logger.error('Registration error:', err);
       toast.error('Erro ao criar conta');
     } finally {
       setRegisterLoading(false);

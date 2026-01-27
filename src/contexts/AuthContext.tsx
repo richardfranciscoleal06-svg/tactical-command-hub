@@ -201,6 +201,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const signOut = async () => {
+    // Clear sensitive localStorage data on logout
+    const localStorageKeys = [
+      'pm19_policiais',
+      'pm19_patrulhas', 
+      'pm19_apreensoes',
+      'pm19_logs',
+      'pm19_pdf_generated'
+    ];
+    localStorageKeys.forEach(key => localStorage.removeItem(key));
+    
     await supabase.auth.signOut();
     setUser(null);
     setSession(null);
