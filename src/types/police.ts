@@ -108,7 +108,7 @@ export interface AuditLog {
   dataHora: string;
 }
 
-export type TabType = 'patrulhamento' | 'apf' | 'cadastro' | 'administrativo' | 'setor' | 'chefia' | 'usuarios';
+export type TabType = 'apf' | 'cadastro' | 'administrativo' | 'setor' | 'chefia' | 'usuarios';
 
 export const UNIDADES = [
   'Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo', 'Foxtrot', 
@@ -117,20 +117,8 @@ export const UNIDADES = [
 ] as const;
 
 export const CARGOS = [
-  'Delegado Geral',
-  'Delegado Geral Adjunto',
-  'Delegado Titular',
-  'Delegado Substituto',
-  'Inspetor',
-  'Escrivão',
-  'Agente Especial',
-  'Agente 1ª Classe',
-  'Agente 2ª Classe',
-  'Agente 3ª Classe',
   'Agente Probatório',
 ] as const;
-
-export const CURSOS = ['Força Tática', 'RPM/ROCAM', 'Nenhum'] as const;
 
 export interface Artigo {
   codigo: string;
