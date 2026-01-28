@@ -1,17 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { Police, Seizure, CARGOS } from '@/types/police';
-import { 
-  getApprovedPolice, 
-  getWeeklySeizureTotals,
-  wasPdfGenerated,
-  setPdfGenerated,
-  resetDashboards,
-  getPolice,
-  savePolice,
-  getSeizures,
-  saveSeizures,
-} from '@/lib/storage';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -43,7 +32,9 @@ import {
   FileText,
   ShieldAlert,
   Loader2,
-  Pencil
+  Pencil,
+  DollarSign,
+  Package
 } from 'lucide-react';
 import { toast } from 'sonner';
 import jsPDF from 'jspdf';
@@ -86,45 +77,144 @@ const ALL_CARGOS = [
   'Agente Probatório',
 ];
 
-export const ChefiaDAP = () => {
+interface PoliceOfficer {
+  id: string;
+  user_id: string;
+  nome_completo: string;
+  rg: string;
+  data_ingresso: string;
+  cargo: string;
+  status: string;
+  created_at: string;
+}
+
+interface APF {
+  id: string;
+  user_id: string;
+  policial_id: string;
+  policial_nome: string;
+  policiais_qru: string | null;
+  nome_individuo: string;
+  rg_individuo: string;
+  informacoes_qru: string;
+  artigos: string[];
+  tempo_prisao: number;
+  itens: Record<string, number>;
+  url_comprovacao: string;
+  status: string;
+  created_at: string;
+}
+
+export const ChefiaDEC = () => {
   const { isAdmin, isLoading: authLoading } = useAuth();
   const [canReset, setCanReset] = useState(false);
+  const [pdfGenerated, setPdfGenerated] = useState(false);
   
   // Data
-  const [policiais, setPoliciais] = useState<Police[]>([]);
-  const [seizures, setSeizures] = useState<Seizure[]>([]);
-  const [seizureData, setSeizureData] = useState<{ totals: Record<string, number>; count: number }>({ totals: {}, count: 0 });
+  const [policiais, setPoliciais] = useState<PoliceOfficer[]>([]);
+  const [apfs, setApfs] = useState<APF[]>([]);
+  const [loading, setLoading] = useState(true);
   
   // Delete confirmation
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<{ type: 'police' | 'seizure'; id: string; name: string } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ type: 'police' | 'apf'; id: string; name: string } | null>(null);
 
   // Edit modal
   const [showEditModal, setShowEditModal] = useState(false);
-  const [editTarget, setEditTarget] = useState<{ type: 'police' | 'seizure'; data: Police | Seizure } | null>(null);
-  const [editFormData, setEditFormData] = useState<Partial<Police>>({});
-  const [editSeizureFormData, setEditSeizureFormData] = useState<Partial<Seizure>>({});
+  const [editTarget, setEditTarget] = useState<{ type: 'police' | 'apf'; data: PoliceOfficer | APF } | null>(null);
+  const [editFormData, setEditFormData] = useState<Partial<PoliceOfficer>>({});
+  const [editApfFormData, setEditApfFormData] = useState<Partial<APF>>({});
 
   useEffect(() => {
     if (isAdmin) {
       loadData();
+
+      // Subscribe to real-time changes
+      const apfChannel = supabase
+        .channel('apfs-chefia')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'apfs' },
+          () => loadApfs()
+        )
+        .subscribe();
+
+      const policeChannel = supabase
+        .channel('police-chefia')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'police_officers' },
+          () => loadPolice()
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(apfChannel);
+        supabase.removeChannel(policeChannel);
+      };
     }
   }, [isAdmin]);
 
-  const loadData = () => {
-    const approved = getApprovedPolice();
-    setPoliciais(approved);
-    
-    const allSeizures = getSeizures();
-    setSeizures(allSeizures);
-    
-    const seizuresData = getWeeklySeizureTotals();
-    setSeizureData(seizuresData);
-    
-    setCanReset(wasPdfGenerated());
+  const loadData = async () => {
+    setLoading(true);
+    await Promise.all([loadPolice(), loadApfs()]);
+    setLoading(false);
   };
 
-  const totalItensApreendidos = Object.values(seizureData.totals).reduce((a, b) => a + b, 0);
+  const loadPolice = async () => {
+    const { data, error } = await supabase
+      .from('police_officers')
+      .select('*')
+      .order('created_at', { ascending: false });
+    
+    if (!error && data) {
+      setPoliciais(data);
+    }
+  };
+
+  const loadApfs = async () => {
+    const { data, error } = await supabase
+      .from('apfs')
+      .select('*')
+      .order('created_at', { ascending: false });
+    
+    if (!error && data) {
+      setApfs(data.map(apf => ({
+        ...apf,
+        itens: apf.itens as Record<string, number>
+      })));
+    }
+  };
+
+  // Calculate statistics
+  const approvedPolice = policiais.filter(p => p.status === 'approved');
+  const approvedApfs = apfs.filter(a => a.status === 'approved');
+
+  // Calculate APFs per police officer
+  const apfsByPolicial = approvedApfs.reduce((acc, apf) => {
+    acc[apf.policial_nome] = (acc[apf.policial_nome] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
+  // Calculate total illegal items
+  const totalItensIlegais = approvedApfs.reduce((total, apf) => {
+    return total + Object.entries(apf.itens)
+      .filter(([key]) => key !== 'dinheiroSujo')
+      .reduce((sum, [, value]) => sum + (value || 0), 0);
+  }, 0);
+
+  // Calculate total dirty money
+  const totalDinheiroSujo = approvedApfs.reduce((total, apf) => {
+    return total + (apf.itens.dinheiroSujo || 0);
+  }, 0);
+
+  // Calculate seizure totals
+  const seizureTotals = approvedApfs.reduce((acc, apf) => {
+    Object.entries(apf.itens).forEach(([key, value]) => {
+      acc[key] = (acc[key] || 0) + (value || 0);
+    });
+    return acc;
+  }, {} as Record<string, number>);
 
   const generatePDF = () => {
     const doc = new jsPDF();
@@ -134,10 +224,10 @@ export const ChefiaDAP = () => {
     // Header
     doc.setFontSize(18);
     doc.setFont('helvetica', 'bold');
-    doc.text('Departamento de Administração e Planejamento - PCESP', 105, 20, { align: 'center' });
+    doc.text('Departamento de Ensino e Carreira - PCESP', 105, 20, { align: 'center' });
     doc.setFontSize(12);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Relatório Semanal - ${currentDate} às ${currentTime}`, 105, 28, { align: 'center' });
+    doc.text(`Relatório - ${currentDate} às ${currentTime}`, 105, 28, { align: 'center' });
 
     // Summary stats
     doc.setFontSize(14);
@@ -146,23 +236,24 @@ export const ChefiaDAP = () => {
     
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Policiais Cadastrados: ${policiais.length}`, 14, 52);
-    doc.text(`Total de APFs: ${seizureData.count}`, 14, 58);
-    doc.text(`Total de Itens Apreendidos: ${totalItensApreendidos}`, 14, 64);
+    doc.text(`Policiais Cadastrados: ${approvedPolice.length}`, 14, 52);
+    doc.text(`Total de APFs: ${approvedApfs.length}`, 14, 58);
+    doc.text(`Total de Itens Ilegais: ${totalItensIlegais}`, 14, 64);
+    doc.text(`Total de Dinheiro Sujo: $${totalDinheiroSujo.toLocaleString()}`, 14, 70);
 
-    // Police table
+    // APFs per police officer table
     doc.setFontSize(14);
     doc.setFont('helvetica', 'bold');
-    doc.text('Policiais Cadastrados', 14, 78);
+    doc.text('APFs por Policial', 14, 84);
 
-    const policeTableData = policiais.map(p => {
-      return [p.nomeCompleto, p.cargo, p.rg];
+    const apfTableData = approvedPolice.map(p => {
+      return [p.nome_completo, p.cargo, p.rg, (apfsByPolicial[p.nome_completo] || 0).toString()];
     });
 
     autoTable(doc, {
-      startY: 83,
-      head: [['Policial', 'Cargo', 'RG']],
-      body: policeTableData,
+      startY: 89,
+      head: [['Policial', 'Cargo', 'RG', 'APFs']],
+      body: apfTableData,
       theme: 'striped',
       headStyles: { fillColor: [30, 41, 59] },
       styles: { fontSize: 9 },
@@ -173,9 +264,9 @@ export const ChefiaDAP = () => {
     
     doc.setFontSize(14);
     doc.setFont('helvetica', 'bold');
-    doc.text('Itens Apreendidos na Semana', 14, finalY);
+    doc.text('Itens Apreendidos', 14, finalY);
 
-    const seizureTableData = Object.entries(seizureData.totals)
+    const seizureTableData = Object.entries(seizureTotals)
       .filter(([_, value]) => value > 0)
       .map(([key, value]) => [ITEM_LABELS[key] || key, value.toString()]);
 
@@ -191,7 +282,7 @@ export const ChefiaDAP = () => {
     } else {
       doc.setFontSize(10);
       doc.setFont('helvetica', 'normal');
-      doc.text('Nenhum item apreendido esta semana.', 14, finalY + 10);
+      doc.text('Nenhum item apreendido.', 14, finalY + 10);
     }
 
     // Footer
@@ -200,7 +291,7 @@ export const ChefiaDAP = () => {
       doc.setPage(i);
       doc.setFontSize(8);
       doc.text(
-        `Página ${i} de ${pageCount} - Gerado automaticamente pelo Sistema DAP PCESP`,
+        `Página ${i} de ${pageCount} - Gerado automaticamente pelo Sistema DEC PCESP`,
         105,
         doc.internal.pageSize.height - 10,
         { align: 'center' }
@@ -208,7 +299,7 @@ export const ChefiaDAP = () => {
     }
 
     // Save PDF
-    doc.save(`relatorio-semanal-dap-${currentDate.replace(/\//g, '-')}.pdf`);
+    doc.save(`relatorio-dec-${currentDate.replace(/\//g, '-')}.pdf`);
     
     // Mark PDF as generated
     setPdfGenerated(true);
@@ -217,77 +308,120 @@ export const ChefiaDAP = () => {
     toast.success('PDF gerado com sucesso!');
   };
 
-  const handleReset = () => {
+  const handleReset = async () => {
     if (!canReset) {
-      toast.error('Você precisa gerar o PDF antes de resetar os dashboards.');
+      toast.error('Você precisa gerar o PDF antes de resetar os dados.');
       return;
     }
     
-    if (confirm('Tem certeza que deseja resetar todos os dados dos dashboards? Esta ação não pode ser desfeita.')) {
-      resetDashboards();
-      loadData();
-      toast.success('Dashboards resetados com sucesso!');
+    if (confirm('Tem certeza que deseja resetar todos os dados? Esta ação não pode ser desfeita.')) {
+      // Delete all approved APFs
+      const { error: apfError } = await supabase
+        .from('apfs')
+        .delete()
+        .eq('status', 'approved');
+
+      if (apfError) {
+        toast.error('Erro ao resetar APFs');
+        return;
+      }
+
+      await loadData();
+      setCanReset(false);
+      setPdfGenerated(false);
+      toast.success('Dados resetados com sucesso!');
     }
   };
 
-  const openDeleteModal = (type: 'police' | 'seizure', id: string, name: string) => {
+  const openDeleteModal = (type: 'police' | 'apf', id: string, name: string) => {
     setDeleteTarget({ type, id, name });
     setShowDeleteModal(true);
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (!deleteTarget) return;
 
     const { type, id } = deleteTarget;
 
     if (type === 'police') {
-      const updated = getPolice().filter(p => p.id !== id);
-      savePolice(updated);
-    } else if (type === 'seizure') {
-      const updated = getSeizures().filter(s => s.id !== id);
-      saveSeizures(updated);
+      const { error } = await supabase
+        .from('police_officers')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        toast.error('Erro ao excluir policial');
+        return;
+      }
+    } else if (type === 'apf') {
+      const { error } = await supabase
+        .from('apfs')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        toast.error('Erro ao excluir APF');
+        return;
+      }
     }
 
     setShowDeleteModal(false);
     setDeleteTarget(null);
-    loadData();
     toast.success('Registro excluído com sucesso!');
   };
 
-  const openEditModal = (type: 'police' | 'seizure', data: Police | Seizure) => {
+  const openEditModal = (type: 'police' | 'apf', data: PoliceOfficer | APF) => {
     setEditTarget({ type, data });
     if (type === 'police') {
-      setEditFormData(data as Police);
+      setEditFormData(data as PoliceOfficer);
     } else {
-      setEditSeizureFormData(data as Seizure);
+      setEditApfFormData(data as APF);
     }
     setShowEditModal(true);
   };
 
-  const confirmEdit = () => {
+  const confirmEdit = async () => {
     if (!editTarget) return;
 
     const { type, data } = editTarget;
 
     if (type === 'police') {
-      const updated = getPolice().map(p => 
-        p.id === data.id ? { ...p, ...editFormData } : p
-      );
-      savePolice(updated);
+      const { error } = await supabase
+        .from('police_officers')
+        .update({
+          nome_completo: editFormData.nome_completo,
+          rg: editFormData.rg,
+          cargo: editFormData.cargo,
+          status: editFormData.status,
+        })
+        .eq('id', data.id);
+
+      if (error) {
+        toast.error('Erro ao atualizar policial');
+        return;
+      }
       toast.success('Policial atualizado com sucesso!');
-    } else if (type === 'seizure') {
-      const updated = getSeizures().map(s => 
-        s.id === data.id ? { ...s, ...editSeizureFormData } : s
-      );
-      saveSeizures(updated);
+    } else if (type === 'apf') {
+      const { error } = await supabase
+        .from('apfs')
+        .update({
+          nome_individuo: editApfFormData.nome_individuo,
+          rg_individuo: editApfFormData.rg_individuo,
+          status: editApfFormData.status,
+        })
+        .eq('id', data.id);
+
+      if (error) {
+        toast.error('Erro ao atualizar APF');
+        return;
+      }
       toast.success('APF atualizado com sucesso!');
     }
 
     setShowEditModal(false);
     setEditTarget(null);
     setEditFormData({});
-    setEditSeizureFormData({});
-    loadData();
+    setEditApfFormData({});
   };
 
   const formatDate = (dateString: string) => {
@@ -295,12 +429,12 @@ export const ChefiaDAP = () => {
   };
 
   // Show loading while checking auth
-  if (authLoading) {
+  if (authLoading || loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px] animate-fade-in">
         <div className="tactical-card p-8 text-center">
           <Loader2 className="w-8 h-8 animate-spin mx-auto text-primary" />
-          <p className="text-muted-foreground mt-2">Verificando permissões...</p>
+          <p className="text-muted-foreground mt-2">Carregando...</p>
         </div>
       </div>
     );
@@ -317,7 +451,7 @@ export const ChefiaDAP = () => {
             </div>
             <h2 className="text-xl font-semibold">Acesso Negado</h2>
             <p className="text-sm text-muted-foreground mt-2">
-              Você não tem permissão para acessar a Chefia DAP.
+              Você não tem permissão para acessar a Chefia DEC.
               Apenas administradores podem acessar esta área.
             </p>
           </div>
@@ -334,7 +468,7 @@ export const ChefiaDAP = () => {
             <Crown className="w-6 h-6 text-warning" />
           </div>
           <div>
-            <h2 className="text-xl font-semibold">Chefia DAP</h2>
+            <h2 className="text-xl font-semibold">Chefia DEC</h2>
             <p className="text-sm text-muted-foreground">Gestão administrativa e controle de dados</p>
           </div>
         </div>
@@ -359,17 +493,68 @@ export const ChefiaDAP = () => {
         </div>
       </div>
 
+      {/* Stats Cards */}
+      <div className="grid sm:grid-cols-4 gap-4">
+        <div className="tactical-card p-6">
+          <div className="flex items-center gap-3">
+            <div className="p-3 rounded-lg bg-primary/20">
+              <Users className="w-6 h-6 text-primary" />
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Policiais</p>
+              <p className="text-2xl font-bold font-mono">{approvedPolice.length}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="tactical-card p-6">
+          <div className="flex items-center gap-3">
+            <div className="p-3 rounded-lg bg-success/20">
+              <FileText className="w-6 h-6 text-success" />
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">APFs</p>
+              <p className="text-2xl font-bold font-mono">{approvedApfs.length}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="tactical-card p-6">
+          <div className="flex items-center gap-3">
+            <div className="p-3 rounded-lg bg-destructive/20">
+              <Package className="w-6 h-6 text-destructive" />
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Itens Ilegais</p>
+              <p className="text-2xl font-bold font-mono">{totalItensIlegais}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="tactical-card p-6">
+          <div className="flex items-center gap-3">
+            <div className="p-3 rounded-lg bg-warning/20">
+              <DollarSign className="w-6 h-6 text-warning" />
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Dinheiro Sujo</p>
+              <p className="text-2xl font-bold font-mono">${totalDinheiroSujo.toLocaleString()}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {!canReset && (
         <div className="flex items-center gap-2 p-3 rounded-lg bg-warning/10 border border-warning/30 text-warning text-sm">
           <AlertTriangle className="w-4 h-4" />
-          <span>Gere o PDF da semana antes de resetar os dashboards.</span>
+          <span>Gere o PDF antes de resetar os dados.</span>
         </div>
       )}
 
       {canReset && (
         <div className="flex items-center gap-2 p-3 rounded-lg bg-success/10 border border-success/30 text-success text-sm">
           <Check className="w-4 h-4" />
-          <span>PDF gerado! Você pode resetar os dashboards quando desejar.</span>
+          <span>PDF gerado! Você pode resetar os dados quando desejar.</span>
         </div>
       )}
 
@@ -388,7 +573,7 @@ export const ChefiaDAP = () => {
               <Users className="w-5 h-5 text-primary" />
               <h3 className="font-semibold">Policiais Cadastrados</h3>
               <span className="ml-auto text-sm text-muted-foreground">
-                {getPolice().length} registros
+                {policiais.length} registros
               </span>
             </div>
             <div className="overflow-x-auto max-h-[300px] overflow-y-auto">
@@ -398,16 +583,20 @@ export const ChefiaDAP = () => {
                     <th className="text-left p-3 font-medium text-muted-foreground">Nome</th>
                     <th className="text-left p-3 font-medium text-muted-foreground">Cargo</th>
                     <th className="text-left p-3 font-medium text-muted-foreground">RG</th>
+                    <th className="text-left p-3 font-medium text-muted-foreground">APFs</th>
                     <th className="text-left p-3 font-medium text-muted-foreground">Status</th>
                     <th className="text-center p-3 font-medium text-muted-foreground">Ações</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {getPolice().map(p => (
+                  {policiais.map(p => (
                     <tr key={p.id} className="border-b border-tactical-border tactical-row">
-                      <td className="p-3 font-medium">{p.nomeCompleto}</td>
+                      <td className="p-3 font-medium">{p.nome_completo}</td>
                       <td className="p-3 text-muted-foreground">{p.cargo}</td>
                       <td className="p-3 font-mono text-muted-foreground">{p.rg}</td>
+                      <td className="p-3 font-mono font-bold text-success">
+                        {apfsByPolicial[p.nome_completo] || 0}
+                      </td>
                       <td className="p-3">
                         <span className={`px-2 py-1 rounded text-xs ${
                           p.status === 'approved' ? 'bg-success/20 text-success' :
@@ -430,7 +619,7 @@ export const ChefiaDAP = () => {
                         <Button
                           size="sm"
                           variant="destructive"
-                          onClick={() => openDeleteModal('police', p.id, p.nomeCompleto)}
+                          onClick={() => openDeleteModal('police', p.id, p.nome_completo)}
                           className="gap-1"
                         >
                           <Trash2 className="w-3 h-3" />
@@ -448,9 +637,9 @@ export const ChefiaDAP = () => {
           <div className="tactical-card overflow-hidden">
             <div className="p-4 border-b border-tactical-border flex items-center gap-2">
               <FileText className="w-5 h-5 text-primary" />
-              <h3 className="font-semibold">APFs (Apreensões)</h3>
+              <h3 className="font-semibold">APFs</h3>
               <span className="ml-auto text-sm text-muted-foreground">
-                {getSeizures().length} registros
+                {apfs.length} registros
               </span>
             </div>
             <div className="overflow-x-auto max-h-[300px] overflow-y-auto">
@@ -460,34 +649,38 @@ export const ChefiaDAP = () => {
                     <th className="text-left p-3 font-medium text-muted-foreground">Policial</th>
                     <th className="text-left p-3 font-medium text-muted-foreground">Indivíduo</th>
                     <th className="text-left p-3 font-medium text-muted-foreground">Itens</th>
+                    <th className="text-left p-3 font-medium text-muted-foreground">Dinheiro</th>
                     <th className="text-left p-3 font-medium text-muted-foreground">Status</th>
                     <th className="text-left p-3 font-medium text-muted-foreground">Data</th>
                     <th className="text-center p-3 font-medium text-muted-foreground">Ações</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {getSeizures().map(s => {
-                    const totalItens = Object.values(s.itens).reduce((a, b) => a + b, 0);
+                  {apfs.map(a => {
+                    const totalItens = Object.entries(a.itens)
+                      .filter(([key]) => key !== 'dinheiroSujo')
+                      .reduce((sum, [, value]) => sum + (value || 0), 0);
                     return (
-                      <tr key={s.id} className="border-b border-tactical-border tactical-row">
-                        <td className="p-3 font-medium">{s.policialNome}</td>
-                        <td className="p-3 text-muted-foreground">{s.nomeIndividuo || '-'}</td>
+                      <tr key={a.id} className="border-b border-tactical-border tactical-row">
+                        <td className="p-3 font-medium">{a.policial_nome}</td>
+                        <td className="p-3 text-muted-foreground">{a.nome_individuo}</td>
                         <td className="p-3 font-mono">{totalItens}</td>
+                        <td className="p-3 font-mono text-warning">${a.itens.dinheiroSujo || 0}</td>
                         <td className="p-3">
                           <span className={`px-2 py-1 rounded text-xs ${
-                            s.status === 'approved' ? 'bg-success/20 text-success' :
-                            s.status === 'rejected' ? 'bg-destructive/20 text-destructive' :
+                            a.status === 'approved' ? 'bg-success/20 text-success' :
+                            a.status === 'rejected' ? 'bg-destructive/20 text-destructive' :
                             'bg-warning/20 text-warning'
                           }`}>
-                            {s.status === 'approved' ? 'Aprovado' : s.status === 'rejected' ? 'Rejeitado' : 'Pendente'}
+                            {a.status === 'approved' ? 'Aprovado' : a.status === 'rejected' ? 'Rejeitado' : 'Pendente'}
                           </span>
                         </td>
-                        <td className="p-3 text-sm text-muted-foreground">{formatDate(s.createdAt)}</td>
+                        <td className="p-3 text-sm text-muted-foreground">{formatDate(a.created_at)}</td>
                         <td className="p-3 text-center flex gap-2 justify-center">
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => openEditModal('seizure', s)}
+                            onClick={() => openEditModal('apf', a)}
                             className="gap-1"
                           >
                             <Pencil className="w-3 h-3" />
@@ -496,7 +689,7 @@ export const ChefiaDAP = () => {
                           <Button
                             size="sm"
                             variant="destructive"
-                            onClick={() => openDeleteModal('seizure', s.id, `APF de ${s.policialNome}`)}
+                            onClick={() => openDeleteModal('apf', a.id, `APF de ${a.policial_nome}`)}
                             className="gap-1"
                           >
                             <Trash2 className="w-3 h-3" />
@@ -564,8 +757,8 @@ export const ChefiaDAP = () => {
                 <div>
                   <Label className="mb-2 block">Nome Completo</Label>
                   <Input
-                    value={editFormData.nomeCompleto || ''}
-                    onChange={(e) => setEditFormData(prev => ({ ...prev, nomeCompleto: e.target.value }))}
+                    value={editFormData.nome_completo || ''}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, nome_completo: e.target.value }))}
                     className="bg-input border-tactical-border"
                   />
                 </div>
@@ -599,7 +792,7 @@ export const ChefiaDAP = () => {
                   <Label className="mb-2 block">Status</Label>
                   <Select 
                     value={editFormData.status || 'pending'} 
-                    onValueChange={(value: 'pending' | 'approved' | 'rejected') => setEditFormData(prev => ({ ...prev, status: value }))}
+                    onValueChange={(value) => setEditFormData(prev => ({ ...prev, status: value }))}
                   >
                     <SelectTrigger className="bg-input border-tactical-border">
                       <SelectValue placeholder="Selecione o status" />
@@ -614,29 +807,29 @@ export const ChefiaDAP = () => {
               </>
             )}
 
-            {editTarget?.type === 'seizure' && (
+            {editTarget?.type === 'apf' && (
               <>
                 <div>
                   <Label className="mb-2 block">Nome do Indivíduo</Label>
                   <Input
-                    value={editSeizureFormData.nomeIndividuo || ''}
-                    onChange={(e) => setEditSeizureFormData(prev => ({ ...prev, nomeIndividuo: e.target.value }))}
+                    value={editApfFormData.nome_individuo || ''}
+                    onChange={(e) => setEditApfFormData(prev => ({ ...prev, nome_individuo: e.target.value }))}
                     className="bg-input border-tactical-border"
                   />
                 </div>
                 <div>
                   <Label className="mb-2 block">RG do Indivíduo</Label>
                   <Input
-                    value={editSeizureFormData.rgIndividuo || ''}
-                    onChange={(e) => setEditSeizureFormData(prev => ({ ...prev, rgIndividuo: e.target.value.replace(/\D/g, '') }))}
+                    value={editApfFormData.rg_individuo || ''}
+                    onChange={(e) => setEditApfFormData(prev => ({ ...prev, rg_individuo: e.target.value.replace(/\D/g, '') }))}
                     className="bg-input border-tactical-border font-mono"
                   />
                 </div>
                 <div>
                   <Label className="mb-2 block">Status</Label>
                   <Select 
-                    value={editSeizureFormData.status || 'pending'} 
-                    onValueChange={(value: 'pending' | 'approved' | 'rejected') => setEditSeizureFormData(prev => ({ ...prev, status: value }))}
+                    value={editApfFormData.status || 'pending'} 
+                    onValueChange={(value) => setEditApfFormData(prev => ({ ...prev, status: value }))}
                   >
                     <SelectTrigger className="bg-input border-tactical-border">
                       <SelectValue placeholder="Selecione o status" />

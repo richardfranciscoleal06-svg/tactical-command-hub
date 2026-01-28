@@ -1,12 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { Police, Patrol, Seizure, AuditLog } from '@/types/police';
-import { 
-  getPolice, updatePolice,
-  getPatrols, updatePatrol,
-  getSeizures, updateSeizure,
-  getLogs, addLog,
-} from '@/lib/storage';
+import { supabase } from '@/integrations/supabase/client';
 import { sanitizeUrl, isValidUrl } from '@/lib/urlValidator';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -31,8 +25,6 @@ import {
   Unlock, 
   Check, 
   X, 
-  Clock, 
-  FileText, 
   Package, 
   UserPlus,
   History,
@@ -42,20 +34,53 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
+interface PoliceOfficer {
+  id: string;
+  nome_completo: string;
+  rg: string;
+  cargo: string;
+  status: string;
+  created_at: string;
+}
+
+interface APF {
+  id: string;
+  policial_nome: string;
+  policiais_qru: string | null;
+  nome_individuo: string;
+  rg_individuo: string;
+  informacoes_qru: string;
+  artigos: string[];
+  tempo_prisao: number;
+  itens: Record<string, number>;
+  url_comprovacao: string;
+  status: string;
+  created_at: string;
+}
+
+interface AuditLog {
+  id: string;
+  oficial_responsavel: string;
+  oficial_rg: string;
+  acao: string;
+  tipo: string;
+  data_hora: string;
+}
+
 export const AdminSector = () => {
   const { isAdmin, isLoading: authLoading } = useAuth();
+  const [loading, setLoading] = useState(true);
   
   // Data
-  const [pendingPolice, setPendingPolice] = useState<Police[]>([]);
-  const [pendingPatrols, setPendingPatrols] = useState<Patrol[]>([]);
-  const [pendingSeizures, setPendingSeizures] = useState<Seizure[]>([]);
+  const [pendingPolice, setPendingPolice] = useState<PoliceOfficer[]>([]);
+  const [pendingApfs, setPendingApfs] = useState<APF[]>([]);
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [filterOficial, setFilterOficial] = useState<string>('all');
   
   // Modal
   const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [approvalData, setApprovalData] = useState<{
-    type: 'patrol' | 'seizure' | 'registration';
+    type: 'apf' | 'registration';
     id: string;
     action: 'approve' | 'reject';
     description: string;
@@ -66,18 +91,86 @@ export const AdminSector = () => {
   useEffect(() => {
     if (isAdmin) {
       loadData();
+
+      // Subscribe to real-time changes
+      const apfChannel = supabase
+        .channel('apfs-admin')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'apfs' },
+          () => loadApfs()
+        )
+        .subscribe();
+
+      const policeChannel = supabase
+        .channel('police-admin')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'police_officers' },
+          () => loadPolice()
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(apfChannel);
+        supabase.removeChannel(policeChannel);
+      };
     }
   }, [isAdmin]);
 
-  const loadData = () => {
-    setPendingPolice(getPolice().filter(p => p.status === 'pending'));
-    setPendingPatrols(getPatrols().filter(p => p.status === 'pending'));
-    setPendingSeizures(getSeizures().filter(s => s.status === 'pending'));
-    setLogs(getLogs());
+  const loadData = async () => {
+    setLoading(true);
+    await Promise.all([loadPolice(), loadApfs()]);
+    // Load logs from localStorage for now (could be migrated to Supabase later)
+    const storedLogs = localStorage.getItem('pm19_logs');
+    if (storedLogs) {
+      try {
+        const parsedLogs = JSON.parse(storedLogs);
+        // Convert old format to new format
+        setLogs(parsedLogs.map((log: any) => ({
+          id: log.id,
+          oficial_responsavel: log.oficialResponsavel || log.oficial_responsavel,
+          oficial_rg: log.oficialRg || log.oficial_rg,
+          acao: log.acao,
+          tipo: log.tipo,
+          data_hora: log.dataHora || log.data_hora,
+        })));
+      } catch {
+        setLogs([]);
+      }
+    }
+    setLoading(false);
+  };
+
+  const loadPolice = async () => {
+    const { data, error } = await supabase
+      .from('police_officers')
+      .select('*')
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false });
+    
+    if (!error && data) {
+      setPendingPolice(data);
+    }
+  };
+
+  const loadApfs = async () => {
+    const { data, error } = await supabase
+      .from('apfs')
+      .select('*')
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false });
+    
+    if (!error && data) {
+      setPendingApfs(data.map(apf => ({
+        ...apf,
+        itens: apf.itens as Record<string, number>
+      })));
+    }
   };
 
   const openApprovalModal = (
-    type: 'patrol' | 'seizure' | 'registration',
+    type: 'apf' | 'registration',
     id: string,
     action: 'approve' | 'reject',
     description: string
@@ -86,7 +179,7 @@ export const AdminSector = () => {
     setShowApprovalModal(true);
   };
 
-  const confirmAction = () => {
+  const confirmAction = async () => {
     if (!approvalData) return;
     if (!oficialNome.trim() || !oficialRg.trim()) {
       toast.error('Preencha nome e RG do oficial');
@@ -97,32 +190,48 @@ export const AdminSector = () => {
     const status = action === 'approve' ? 'approved' : 'rejected';
     const actionText = action === 'approve' ? 'Aceitou' : 'Negou';
 
-    // Update record
-    if (type === 'patrol') {
-      updatePatrol(id, { status });
-    } else if (type === 'seizure') {
-      updateSeizure(id, { status });
+    // Update record in Supabase
+    if (type === 'apf') {
+      const { error } = await supabase
+        .from('apfs')
+        .update({ status })
+        .eq('id', id);
+
+      if (error) {
+        toast.error('Erro ao atualizar APF');
+        return;
+      }
     } else {
-      updatePolice(id, { status });
+      const { error } = await supabase
+        .from('police_officers')
+        .update({ status })
+        .eq('id', id);
+
+      if (error) {
+        toast.error('Erro ao atualizar policial');
+        return;
+      }
     }
 
-    // Add log
+    // Add log to localStorage
     const log: AuditLog = {
       id: crypto.randomUUID(),
-      oficialResponsavel: oficialNome,
-      oficialRg,
+      oficial_responsavel: oficialNome,
+      oficial_rg: oficialRg,
       acao: `${actionText} ${description}`,
       tipo: type,
-      dataHora: new Date().toISOString(),
+      data_hora: new Date().toISOString(),
     };
-    addLog(log);
+
+    const currentLogs = [...logs, log];
+    setLogs(currentLogs);
+    localStorage.setItem('pm19_logs', JSON.stringify(currentLogs));
 
     // Reset and reload
     setShowApprovalModal(false);
     setApprovalData(null);
     setOficialNome('');
     setOficialRg('');
-    loadData();
     toast.success(`${actionText} com sucesso!`);
   };
 
@@ -131,21 +240,21 @@ export const AdminSector = () => {
   };
 
   const getUniqueOfficials = () => {
-    const officials = logs.map(l => l.oficialResponsavel);
+    const officials = logs.map(l => l.oficial_responsavel);
     return [...new Set(officials)];
   };
 
   const filteredLogs = filterOficial === 'all' 
     ? logs 
-    : logs.filter(l => l.oficialResponsavel === filterOficial);
+    : logs.filter(l => l.oficial_responsavel === filterOficial);
 
   // Show loading while checking auth
-  if (authLoading) {
+  if (authLoading || loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px] animate-fade-in">
         <div className="tactical-card p-8 text-center">
           <Loader2 className="w-8 h-8 animate-spin mx-auto text-primary" />
-          <p className="text-muted-foreground mt-2">Verificando permissões...</p>
+          <p className="text-muted-foreground mt-2">Carregando...</p>
         </div>
       </div>
     );
@@ -189,23 +298,14 @@ export const AdminSector = () => {
         </div>
       </div>
 
-      <Tabs defaultValue="patrols" className="space-y-4">
+      <Tabs defaultValue="seizures" className="space-y-4">
         <TabsList className="bg-muted/50 border border-tactical-border">
-          <TabsTrigger value="patrols" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-            <Clock className="w-4 h-4" />
-            Patrulhamentos
-            {pendingPatrols.length > 0 && (
-              <span className="ml-1 px-1.5 py-0.5 text-xs rounded-full bg-warning text-warning-foreground">
-                {pendingPatrols.length}
-              </span>
-            )}
-          </TabsTrigger>
           <TabsTrigger value="seizures" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
             <Package className="w-4 h-4" />
             APFs
-            {pendingSeizures.length > 0 && (
+            {pendingApfs.length > 0 && (
               <span className="ml-1 px-1.5 py-0.5 text-xs rounded-full bg-warning text-warning-foreground">
-                {pendingSeizures.length}
+                {pendingApfs.length}
               </span>
             )}
           </TabsTrigger>
@@ -224,106 +324,57 @@ export const AdminSector = () => {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="patrols" className="space-y-4">
-          {pendingPatrols.length === 0 ? (
-            <div className="tactical-card p-8 text-center text-muted-foreground">
-              <FileText className="w-12 h-12 mx-auto mb-4 opacity-50" />
-              Nenhum patrulhamento pendente
-            </div>
-          ) : (
-            pendingPatrols.map(patrol => (
-              <div key={patrol.id} className="tactical-card p-4">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="font-semibold">Unidade {patrol.unidade}</p>
-                    <p className="text-sm text-muted-foreground">
-                      Assinatura: {patrol.assinatura}
-                    </p>
-                    <p className="text-sm text-muted-foreground font-mono">
-                      Duração: {patrol.horasTrabalhadas?.toFixed(2)}h
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {formatDate(patrol.inicioTimestamp)}
-                    </p>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      onClick={() => openApprovalModal('patrol', patrol.id, 'approve', `Patrulhamento da Unidade ${patrol.unidade}`)}
-                      className="gap-1"
-                    >
-                      <Check className="w-4 h-4" />
-                      Aceitar
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      onClick={() => openApprovalModal('patrol', patrol.id, 'reject', `Patrulhamento da Unidade ${patrol.unidade}`)}
-                      className="gap-1"
-                    >
-                      <X className="w-4 h-4" />
-                      Negar
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            ))
-          )}
-        </TabsContent>
-
         <TabsContent value="seizures" className="space-y-4">
-          {pendingSeizures.length === 0 ? (
+          {pendingApfs.length === 0 ? (
             <div className="tactical-card p-8 text-center text-muted-foreground">
               <Package className="w-12 h-12 mx-auto mb-4 opacity-50" />
               Nenhum APF pendente
             </div>
           ) : (
-            pendingSeizures.map(seizure => {
-              const totalItens = Object.values(seizure.itens).reduce((a, b) => a + b, 0);
+            pendingApfs.map(apf => {
+              const totalItens = Object.entries(apf.itens)
+                .filter(([key]) => key !== 'dinheiroSujo')
+                .reduce((sum, [, value]) => sum + (value || 0), 0);
               return (
-                <div key={seizure.id} className="tactical-card p-4">
+                <div key={apf.id} className="tactical-card p-4">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1">
-                      <p className="font-semibold">{seizure.policialNome}</p>
+                      <p className="font-semibold">{apf.policial_nome}</p>
                       
                       {/* Informações do Indivíduo */}
-                      {seizure.nomeIndividuo && (
-                        <div className="mt-2 p-2 bg-destructive/10 rounded border border-destructive/30">
-                          <p className="text-sm font-medium text-destructive">Indivíduo Apreendido:</p>
-                          <p className="text-sm">{seizure.nomeIndividuo} - RG: {seizure.rgIndividuo}</p>
-                        </div>
-                      )}
+                      <div className="mt-2 p-2 bg-destructive/10 rounded border border-destructive/30">
+                        <p className="text-sm font-medium text-destructive">Indivíduo Apreendido:</p>
+                        <p className="text-sm">{apf.nome_individuo} - RG: {apf.rg_individuo}</p>
+                      </div>
                       
                       {/* Policiais da QRU */}
-                      {seizure.policiaisQru && (
+                      {apf.policiais_qru && (
                         <div className="mt-2 p-2 bg-muted/30 rounded border border-tactical-border">
                           <p className="text-sm font-medium text-primary">Policiais da QRU:</p>
-                          <p className="text-sm text-muted-foreground">{seizure.policiaisQru}</p>
+                          <p className="text-sm text-muted-foreground">{apf.policiais_qru}</p>
                         </div>
                       )}
                       
-                      {/* Informações da QRU - Descrição para análise */}
-                      {seizure.informacoesQru && (
-                        <div className="mt-2 p-3 bg-primary/5 rounded border border-primary/30">
-                          <p className="text-sm font-medium text-primary">Informações da Ocorrência (QRU):</p>
-                          <p className="text-sm text-muted-foreground whitespace-pre-wrap">{seizure.informacoesQru}</p>
-                        </div>
-                      )}
+                      {/* Informações da QRU */}
+                      <div className="mt-2 p-3 bg-primary/5 rounded border border-primary/30">
+                        <p className="text-sm font-medium text-primary">Informações da Ocorrência (QRU):</p>
+                        <p className="text-sm text-muted-foreground whitespace-pre-wrap">{apf.informacoes_qru}</p>
+                      </div>
                       
                       {/* Artigos */}
-                      {seizure.artigos && seizure.artigos.length > 0 && (
+                      {apf.artigos && apf.artigos.length > 0 && (
                         <div className="mt-2">
-                          <p className="text-sm font-medium">Artigos: <span className="text-primary">{seizure.artigos.join(', ')}</span></p>
-                          <p className="text-sm text-warning">Tempo de prisão: {seizure.tempoPrisao} minutos</p>
+                          <p className="text-sm font-medium">Artigos: <span className="text-primary">{apf.artigos.join(', ')}</span></p>
+                          <p className="text-sm text-warning">Tempo de prisão: {apf.tempo_prisao} minutos</p>
                         </div>
                       )}
                       
                       <p className="text-sm text-muted-foreground mt-2">
-                        {totalItens} itens apreendidos
+                        {totalItens} itens ilegais • ${apf.itens.dinheiroSujo || 0} dinheiro sujo
                       </p>
-                      {seizure.urlComprovacao && isValidUrl(seizure.urlComprovacao) && (
+                      {apf.url_comprovacao && isValidUrl(apf.url_comprovacao) && (
                         <a 
-                          href={sanitizeUrl(seizure.urlComprovacao)} 
+                          href={sanitizeUrl(apf.url_comprovacao)} 
                           target="_blank" 
                           rel="noopener noreferrer"
                           className="text-sm text-primary hover:underline"
@@ -331,19 +382,19 @@ export const AdminSector = () => {
                           Ver comprovação
                         </a>
                       )}
-                      {seizure.urlComprovacao && !isValidUrl(seizure.urlComprovacao) && (
+                      {apf.url_comprovacao && !isValidUrl(apf.url_comprovacao) && (
                         <span className="text-sm text-destructive">
                           URL de comprovação inválida
                         </span>
                       )}
                       <p className="text-xs text-muted-foreground mt-1">
-                        {formatDate(seizure.createdAt)}
+                        {formatDate(apf.created_at)}
                       </p>
                     </div>
                     <div className="flex gap-2">
                       <Button
                         size="sm"
-                        onClick={() => openApprovalModal('seizure', seizure.id, 'approve', `APF de ${seizure.policialNome}`)}
+                        onClick={() => openApprovalModal('apf', apf.id, 'approve', `APF de ${apf.policial_nome}`)}
                         className="gap-1"
                       >
                         <Check className="w-4 h-4" />
@@ -352,7 +403,7 @@ export const AdminSector = () => {
                       <Button
                         size="sm"
                         variant="destructive"
-                        onClick={() => openApprovalModal('seizure', seizure.id, 'reject', `APF de ${seizure.policialNome}`)}
+                        onClick={() => openApprovalModal('apf', apf.id, 'reject', `APF de ${apf.policial_nome}`)}
                         className="gap-1"
                       >
                         <X className="w-4 h-4" />
@@ -377,21 +428,18 @@ export const AdminSector = () => {
               <div key={police.id} className="tactical-card p-4">
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <p className="font-semibold">{police.nomeCompleto}</p>
+                    <p className="font-semibold">{police.nome_completo}</p>
                     <p className="text-sm text-muted-foreground">
                       {police.cargo} • RG: {police.rg}
                     </p>
-                    <p className="text-sm text-muted-foreground">
-                      Cursos: {police.cursos.join(', ')}
-                    </p>
                     <p className="text-xs text-muted-foreground mt-1">
-                      {formatDate(police.createdAt)}
+                      {formatDate(police.created_at)}
                     </p>
                   </div>
                   <div className="flex gap-2">
                     <Button
                       size="sm"
-                      onClick={() => openApprovalModal('registration', police.id, 'approve', `Cadastro de ${police.nomeCompleto}`)}
+                      onClick={() => openApprovalModal('registration', police.id, 'approve', `Cadastro de ${police.nome_completo}`)}
                       className="gap-1"
                     >
                       <Check className="w-4 h-4" />
@@ -400,7 +448,7 @@ export const AdminSector = () => {
                     <Button
                       size="sm"
                       variant="destructive"
-                      onClick={() => openApprovalModal('registration', police.id, 'reject', `Cadastro de ${police.nomeCompleto}`)}
+                      onClick={() => openApprovalModal('registration', police.id, 'reject', `Cadastro de ${police.nome_completo}`)}
                       className="gap-1"
                     >
                       <X className="w-4 h-4" />
@@ -440,26 +488,38 @@ export const AdminSector = () => {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-tactical-border bg-muted/30">
-                  <th className="text-left p-3 font-medium text-muted-foreground">Data/Hora</th>
-                  <th className="text-left p-3 font-medium text-muted-foreground">Oficial</th>
-                  <th className="text-left p-3 font-medium text-muted-foreground">RG</th>
-                  <th className="text-left p-3 font-medium text-muted-foreground">Ação</th>
+                  <th className="text-left p-4 font-medium text-muted-foreground">Oficial</th>
+                  <th className="text-left p-4 font-medium text-muted-foreground">RG</th>
+                  <th className="text-left p-4 font-medium text-muted-foreground">Ação</th>
+                  <th className="text-left p-4 font-medium text-muted-foreground">Tipo</th>
+                  <th className="text-left p-4 font-medium text-muted-foreground">Data/Hora</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredLogs.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="p-8 text-center text-muted-foreground">
+                    <td colSpan={5} className="p-8 text-center text-muted-foreground">
                       Nenhum log encontrado
                     </td>
                   </tr>
                 ) : (
-                  filteredLogs.map(log => (
+                  filteredLogs.slice().reverse().map(log => (
                     <tr key={log.id} className="border-b border-tactical-border tactical-row">
-                      <td className="p-3 text-sm">{formatDate(log.dataHora)}</td>
-                      <td className="p-3 font-medium">{log.oficialResponsavel}</td>
-                      <td className="p-3 font-mono text-muted-foreground">{log.oficialRg}</td>
-                      <td className="p-3 text-sm">{log.acao}</td>
+                      <td className="p-4 font-medium">{log.oficial_responsavel}</td>
+                      <td className="p-4 font-mono text-muted-foreground">{log.oficial_rg}</td>
+                      <td className="p-4">{log.acao}</td>
+                      <td className="p-4">
+                        <span className={`px-2 py-1 rounded text-xs ${
+                          log.tipo === 'apf' ? 'bg-primary/20 text-primary' :
+                          log.tipo === 'registration' ? 'bg-success/20 text-success' :
+                          'bg-muted text-muted-foreground'
+                        }`}>
+                          {log.tipo === 'apf' ? 'APF' : 
+                           log.tipo === 'registration' ? 'Cadastro' : 
+                           log.tipo}
+                        </span>
+                      </td>
+                      <td className="p-4 text-sm text-muted-foreground">{formatDate(log.data_hora)}</td>
                     </tr>
                   ))
                 )}
@@ -479,32 +539,32 @@ export const AdminSector = () => {
               ) : (
                 <X className="w-5 h-5 text-destructive" />
               )}
-              {approvalData?.action === 'approve' ? 'Aceitar' : 'Negar'} {approvalData?.description}
+              {approvalData?.action === 'approve' ? 'Confirmar Aprovação' : 'Confirmar Rejeição'}
             </DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-4 py-4">
-            <p className="text-sm text-muted-foreground">
-              Preencha os dados do oficial responsável pela {approvalData?.action === 'approve' ? 'aprovação' : 'reprovação'}:
+          <div className="py-4 space-y-4">
+            <p className="text-muted-foreground">
+              {approvalData?.description}
             </p>
             
             <div>
-              <Label>Nome do Oficial</Label>
+              <Label className="mb-2 block">Nome do Oficial Responsável</Label>
               <Input
                 value={oficialNome}
                 onChange={(e) => setOficialNome(e.target.value)}
                 placeholder="Nome completo"
-                className="mt-1.5 bg-input border-tactical-border"
+                className="bg-input border-tactical-border"
               />
             </div>
             
             <div>
-              <Label>RG do Oficial</Label>
+              <Label className="mb-2 block">RG do Oficial</Label>
               <Input
                 value={oficialRg}
-                onChange={(e) => setOficialRg(e.target.value)}
-                placeholder="RG"
-                className="mt-1.5 bg-input border-tactical-border"
+                onChange={(e) => setOficialRg(e.target.value.replace(/\D/g, ''))}
+                placeholder="Somente números"
+                className="bg-input border-tactical-border font-mono"
               />
             </div>
           </div>

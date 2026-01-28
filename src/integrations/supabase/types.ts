@@ -14,6 +14,96 @@ export type Database = {
   }
   public: {
     Tables: {
+      apfs: {
+        Row: {
+          artigos: string[]
+          created_at: string
+          id: string
+          informacoes_qru: string
+          itens: Json
+          nome_individuo: string
+          policiais_qru: string | null
+          policial_id: string
+          policial_nome: string
+          rg_individuo: string
+          status: string
+          tempo_prisao: number
+          updated_at: string
+          url_comprovacao: string
+          user_id: string
+        }
+        Insert: {
+          artigos: string[]
+          created_at?: string
+          id?: string
+          informacoes_qru: string
+          itens?: Json
+          nome_individuo: string
+          policiais_qru?: string | null
+          policial_id: string
+          policial_nome: string
+          rg_individuo: string
+          status?: string
+          tempo_prisao: number
+          updated_at?: string
+          url_comprovacao: string
+          user_id: string
+        }
+        Update: {
+          artigos?: string[]
+          created_at?: string
+          id?: string
+          informacoes_qru?: string
+          itens?: Json
+          nome_individuo?: string
+          policiais_qru?: string | null
+          policial_id?: string
+          policial_nome?: string
+          rg_individuo?: string
+          status?: string
+          tempo_prisao?: number
+          updated_at?: string
+          url_comprovacao?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      police_officers: {
+        Row: {
+          cargo: string
+          created_at: string
+          data_ingresso: string
+          id: string
+          nome_completo: string
+          rg: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          cargo?: string
+          created_at?: string
+          data_ingresso: string
+          id?: string
+          nome_completo: string
+          rg: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          cargo?: string
+          created_at?: string
+          data_ingresso?: string
+          id?: string
+          nome_completo?: string
+          rg?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string

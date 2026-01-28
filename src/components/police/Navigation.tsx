@@ -20,7 +20,7 @@ const tabs: { id: TabType; label: string; icon: React.ReactNode }[] = [
   { id: 'administrativo', label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
   { id: 'setor', label: 'Setor Admin', icon: <Lock className="w-5 h-5" /> },
   { id: 'usuarios', label: 'Usuários', icon: <Users className="w-5 h-5" /> },
-  { id: 'chefia', label: 'Chefia DAP', icon: <Crown className="w-5 h-5" /> },
+  { id: 'chefia', label: 'Chefia DEC', icon: <Crown className="w-5 h-5" /> },
 ];
 
 export const Navigation = ({ activeTab, onTabChange }: NavigationProps) => {
