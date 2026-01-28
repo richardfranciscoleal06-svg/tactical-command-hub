@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Police, Seizure, ARTIGOS_PENAIS } from '@/types/police';
-import { getApprovedPolice, addSeizure } from '@/lib/storage';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+import { ARTIGOS_PENAIS } from '@/types/police';
 import { isValidUrl } from '@/lib/urlValidator';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,8 +15,14 @@ import {
   SelectTrigger, 
   SelectValue 
 } from '@/components/ui/select';
-import { FileText, Send, Camera, Clock, User, Scale } from 'lucide-react';
+import { FileText, Send, Camera, Clock, User, Scale, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+
+interface PoliceOfficer {
+  id: string;
+  nome_completo: string;
+  cargo: string;
+}
 
 const ITENS_LABELS = {
   sementeCannabis: 'Semente de Cannabis',
@@ -62,8 +69,11 @@ const defaultItens = {
 };
 
 export const APFReport = () => {
-  const [policiais, setPoliciais] = useState<Police[]>([]);
+  const { user } = useAuth();
+  const [policiais, setPoliciais] = useState<PoliceOfficer[]>([]);
   const [selectedPolicial, setSelectedPolicial] = useState<string>('');
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   
   // Novos campos
   const [policiaisQru, setPoliciaisQru] = useState('');
@@ -76,12 +86,20 @@ export const APFReport = () => {
   const [urlComprovacao, setUrlComprovacao] = useState('');
 
   useEffect(() => {
-    loadData();
+    loadPolice();
   }, []);
 
-  const loadData = () => {
-    const approved = getApprovedPolice();
-    setPoliciais(approved);
+  const loadPolice = async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('police_officers')
+      .select('id, nome_completo, cargo')
+      .eq('status', 'approved');
+    
+    if (!error && data) {
+      setPoliciais(data);
+    }
+    setLoading(false);
   };
 
   const handleItemChange = (key: string, value: string) => {
@@ -135,7 +153,12 @@ export const APFReport = () => {
     return `${mins}min`;
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
+    if (!user) {
+      toast.error('Você precisa estar logado para enviar um APF');
+      return;
+    }
+
     if (!selectedPolicial) {
       toast.error('Selecione um policial responsável');
       return;
@@ -176,23 +199,31 @@ export const APFReport = () => {
 
     const tempoPrisao = calcularTempoPrisao();
 
-    const seizure: Seizure = {
-      id: crypto.randomUUID(),
-      policialId: selectedPolicial,
-      policialNome: policial.nomeCompleto,
-      policiaisQru: policiaisQru.trim() || undefined,
-      nomeIndividuo: nomeIndividuo.trim(),
-      rgIndividuo: rgIndividuo.trim(),
-      informacoesQru: informacoesQru.trim(),
-      artigos: artigosSelecionados,
-      tempoPrisao,
-      itens,
-      urlComprovacao,
-      createdAt: new Date().toISOString(),
-      status: 'pending',
-    };
+    setSubmitting(true);
 
-    addSeizure(seizure);
+    const { error } = await supabase
+      .from('apfs')
+      .insert({
+        user_id: user.id,
+        policial_id: selectedPolicial,
+        policial_nome: policial.nome_completo,
+        policiais_qru: policiaisQru.trim() || null,
+        nome_individuo: nomeIndividuo.trim(),
+        rg_individuo: rgIndividuo.trim(),
+        informacoes_qru: informacoesQru.trim(),
+        artigos: artigosSelecionados,
+        tempo_prisao: tempoPrisao,
+        itens,
+        url_comprovacao: urlComprovacao,
+        status: 'pending',
+      });
+
+    setSubmitting(false);
+
+    if (error) {
+      toast.error('Erro ao enviar APF: ' + error.message);
+      return;
+    }
     
     // Reset form
     setItens(defaultItens);
@@ -213,6 +244,14 @@ export const APFReport = () => {
   const artigoUnicoSelecionado = artigosSelecionados.some(
     cod => ARTIGOS_PENAIS.find(a => a.codigo === cod)?.artigoUnico
   );
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -249,7 +288,7 @@ export const APFReport = () => {
           <SelectContent>
             {policiais.map(p => (
               <SelectItem key={p.id} value={p.id}>
-                {p.nomeCompleto} - {p.cargo}
+                {p.nome_completo} - {p.cargo}
               </SelectItem>
             ))}
           </SelectContent>
@@ -464,9 +503,13 @@ export const APFReport = () => {
       <Button 
         onClick={handleSubmit}
         className="w-full h-12 gap-2"
-        disabled={!selectedPolicial}
+        disabled={!selectedPolicial || submitting}
       >
-        <Send className="w-5 h-5" />
+        {submitting ? (
+          <Loader2 className="w-5 h-5 animate-spin" />
+        ) : (
+          <Send className="w-5 h-5" />
+        )}
         Enviar APF para Aprovação
       </Button>
     </div>

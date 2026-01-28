@@ -11,8 +11,8 @@ interface AuthContextType {
   userStatus: UserStatus;
   isLoading: boolean;
   isAdmin: boolean;
-  signUp: (email: string, password: string, username: string, justification: string, proofUrl: string | null) => Promise<{ error: any }>;
-  signIn: (email: string, password: string) => Promise<{ error: any; status?: UserStatus }>;
+  signUp: (usernameAsEmail: string, password: string, username: string, justification: string) => Promise<{ error: any }>;
+  signIn: (username: string, password: string) => Promise<{ error: any; status?: UserStatus }>;
   signOut: () => Promise<void>;
   refreshUserStatus: () => Promise<void>;
 }
@@ -127,16 +127,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const signUp = async (
-    email: string,
+    usernameAsEmail: string,
     password: string,
     username: string,
-    justification: string,
-    proofUrl: string | null
+    justification: string
   ) => {
+    // Use username as a fake email for Supabase auth
+    const fakeEmail = `${usernameAsEmail.toLowerCase().replace(/[^a-z0-9]/g, '')}@dec.pcesp.local`;
     const redirectUrl = `${window.location.origin}/`;
     
     const { data, error } = await supabase.auth.signUp({
-      email,
+      email: fakeEmail,
       password,
       options: {
         emailRedirectTo: redirectUrl
@@ -155,7 +156,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           user_id: data.user.id,
           username,
           justification,
-          proof_url: proofUrl,
+          proof_url: null,
           status: 'pending'
         });
 
@@ -163,14 +164,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         logger.error('Error creating profile:', profileError);
         return { error: profileError };
       }
+
+      // Sign out the user - they need to wait for approval
+      await supabase.auth.signOut();
     }
 
     return { error: null };
   };
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = async (username: string, password: string) => {
+    // Use username as a fake email for Supabase auth
+    const fakeEmail = `${username.toLowerCase().replace(/[^a-z0-9]/g, '')}@dec.pcesp.local`;
+    
     const { data, error } = await supabase.auth.signInWithPassword({
-      email,
+      email: fakeEmail,
       password,
     });
 
