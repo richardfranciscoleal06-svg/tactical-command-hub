@@ -42,6 +42,9 @@ export const Patrulhamento = () => {
   const [unidade, setUnidade] = useState<string>('');
   const [assinatura, setAssinatura] = useState('');
   const [senhaViatura, setSenhaViatura] = useState('');
+  const [endingPatrol, setEndingPatrol] = useState<Patrol | null>(null);
+  const [relatorio, setRelatorio] = useState('');
+  const [submittingEnd, setSubmittingEnd] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -107,10 +110,26 @@ export const Patrulhamento = () => {
     setSenhaViatura('');
   };
 
-  const handleEnd = async (patrol: Patrol) => {
-    const inicio = new Date(patrol.inicio_timestamp).getTime();
-    const agora = Date.now();
-    const horas = +((agora - inicio) / 3600000).toFixed(2);
+  const openEndDialog = (patrol: Patrol) => {
+    setEndingPatrol(patrol);
+    setRelatorio('');
+  };
+
+  const submitEnd = async () => {
+    if (!endingPatrol) return;
+    const trimmed = relatorio.trim();
+    if (trimmed.length < 20) {
+      toast.error('O relatório deve ter pelo menos 20 caracteres.');
+      return;
+    }
+    if (trimmed.length > 2000) {
+      toast.error('O relatório deve ter no máximo 2000 caracteres.');
+      return;
+    }
+
+    setSubmittingEnd(true);
+    const inicio = new Date(endingPatrol.inicio_timestamp).getTime();
+    const horas = +((Date.now() - inicio) / 3600000).toFixed(2);
 
     const { error } = await supabase
       .from('patrols')
@@ -118,11 +137,15 @@ export const Patrulhamento = () => {
         fim_timestamp: new Date().toISOString(),
         horas_trabalhadas: horas,
         status: 'pending',
+        relatorio: trimmed,
       })
-      .eq('id', patrol.id);
+      .eq('id', endingPatrol.id);
+    setSubmittingEnd(false);
 
     if (error) return toast.error('Erro: ' + error.message);
     toast.success(`Patrulha encerrada (${horas}h)`);
+    setEndingPatrol(null);
+    setRelatorio('');
   };
 
   const officerName = (id: string) => officers.find(o => o.id === id)?.nome_completo || id;
