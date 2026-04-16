@@ -309,19 +309,35 @@ export const Patrulhamento = () => {
               Faça um breve resumo sobre o patrulhamento. O envio do relatório é obrigatório para encerrar a patrulha.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-2">
-            <Label>Resumo do patrulhamento</Label>
-            <Textarea
-              value={relatorio}
-              onChange={(e) => setRelatorio(e.target.value)}
-              placeholder="Descreva ocorrências, áreas patrulhadas, abordagens realizadas, etc."
-              rows={6}
-              maxLength={2000}
-              className="bg-input border-tactical-border"
-            />
-            <p className="text-xs text-muted-foreground text-right">
-              {relatorio.trim().length}/2000 (mínimo 20)
-            </p>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                <Hash className="w-4 h-4 text-primary" />
+                Senha da Viatura (confirmação)
+              </Label>
+              <Input
+                type="password"
+                value={confirmSenhaViatura}
+                onChange={(e) => setConfirmSenhaViatura(e.target.value)}
+                placeholder="Digite a senha da viatura"
+                className="bg-input border-tactical-border font-mono"
+                autoComplete="off"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Resumo do patrulhamento</Label>
+              <Textarea
+                value={relatorio}
+                onChange={(e) => setRelatorio(e.target.value)}
+                placeholder="Descreva ocorrências, áreas patrulhadas, abordagens realizadas, etc."
+                rows={6}
+                maxLength={2000}
+                className="bg-input border-tactical-border"
+              />
+              <p className="text-xs text-muted-foreground text-right">
+                {relatorio.trim().length}/2000 (mínimo 20)
+              </p>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEndingPatrol(null)} disabled={submittingEnd}>
