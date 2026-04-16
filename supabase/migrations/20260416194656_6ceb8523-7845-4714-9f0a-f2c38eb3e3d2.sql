@@ -1,0 +1,1 @@
+ALTER TABLE public.patrols ADD COLUMN relatorio TEXT;
