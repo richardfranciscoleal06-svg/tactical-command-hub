@@ -251,8 +251,8 @@ export const Patrulhamento = () => {
                     Início: {new Date(p.inicio_timestamp).toLocaleString('pt-BR')}
                   </p>
                 </div>
-                <Button onClick={() => handleEnd(p)} variant="destructive" size="sm" className="gap-2">
-                  <Square className="w-4 h-4" /> Encerrar
+                <Button onClick={() => openEndDialog(p)} variant="destructive" size="sm" className="gap-2">
+                  <FileText className="w-4 h-4" /> Encerrar e enviar relatório
                 </Button>
               </div>
             </Card>
