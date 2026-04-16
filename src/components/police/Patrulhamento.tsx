@@ -44,6 +44,7 @@ export const Patrulhamento = () => {
   const [senhaViatura, setSenhaViatura] = useState('');
   const [endingPatrol, setEndingPatrol] = useState<Patrol | null>(null);
   const [relatorio, setRelatorio] = useState('');
+  const [confirmSenhaViatura, setConfirmSenhaViatura] = useState('');
   const [submittingEnd, setSubmittingEnd] = useState(false);
 
   useEffect(() => {
