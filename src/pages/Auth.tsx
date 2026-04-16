@@ -284,7 +284,7 @@ const Auth = () => {
         </div>
 
         <p className="text-xs text-center text-muted-foreground mt-4 font-mono">
-          SISTEMA POLICIAL • DEC PCESP • v1.0.0
+          SISTEMA POLICIAL • GER PCESP • v1.0.0
         </p>
       </div>
     </div>

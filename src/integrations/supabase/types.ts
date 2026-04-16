@@ -68,6 +68,51 @@ export type Database = {
         }
         Relationships: []
       }
+      patrols: {
+        Row: {
+          assinatura: string
+          created_at: string
+          fim_timestamp: string | null
+          horas_trabalhadas: number | null
+          id: string
+          inicio_timestamp: string
+          policiais: string[]
+          senha_viatura: string
+          status: string
+          unidade: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          assinatura: string
+          created_at?: string
+          fim_timestamp?: string | null
+          horas_trabalhadas?: number | null
+          id?: string
+          inicio_timestamp?: string
+          policiais?: string[]
+          senha_viatura: string
+          status?: string
+          unidade: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          assinatura?: string
+          created_at?: string
+          fim_timestamp?: string | null
+          horas_trabalhadas?: number | null
+          id?: string
+          inicio_timestamp?: string
+          policiais?: string[]
+          senha_viatura?: string
+          status?: string
+          unidade?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       police_officers: {
         Row: {
           cargo: string

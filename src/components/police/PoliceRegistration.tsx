@@ -4,7 +4,9 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { UserPlus, BadgeCheck, Calendar, Hash, Loader2 } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { CARGOS } from '@/types/police';
+import { UserPlus, BadgeCheck, Calendar, Hash, Loader2, Briefcase } from 'lucide-react';
 import { toast } from 'sonner';
 
 export const PoliceRegistration = () => {
@@ -12,6 +14,7 @@ export const PoliceRegistration = () => {
   const [nomeCompleto, setNomeCompleto] = useState('');
   const [rg, setRg] = useState('');
   const [dataIngresso, setDataIngresso] = useState('');
+  const [cargo, setCargo] = useState<string>(CARGOS[0]);
   const [loading, setLoading] = useState(false);
 
   const handleRgChange = (value: string) => {
@@ -49,7 +52,7 @@ export const PoliceRegistration = () => {
         nome_completo: nomeCompleto.trim(),
         rg,
         data_ingresso: dataIngresso,
-        cargo: 'Agente Probatório',
+        cargo,
         status: 'pending',
       });
 
@@ -64,6 +67,7 @@ export const PoliceRegistration = () => {
     setNomeCompleto('');
     setRg('');
     setDataIngresso('');
+    setCargo(CARGOS[0]);
 
     toast.success('Cadastro enviado para aprovação!');
   };
@@ -127,14 +131,22 @@ export const PoliceRegistration = () => {
         </div>
 
         <div className="tactical-card p-6">
-          <Label className="text-base font-medium mb-2 block">
+          <Label className="flex items-center gap-2 mb-2">
+            <Briefcase className="w-4 h-4 text-primary" />
             Cargo
           </Label>
-          <p className="text-sm text-muted-foreground p-3 bg-muted/30 rounded-lg border border-tactical-border">
-            Agente Probatório
-          </p>
+          <Select value={cargo} onValueChange={setCargo} disabled={loading}>
+            <SelectTrigger className="bg-input border-tactical-border">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {CARGOS.map((c) => (
+                <SelectItem key={c} value={c}>{c}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <p className="text-xs text-muted-foreground mt-2">
-            Promoções podem ser feitas pela Chefia DEC.
+            Promoções podem ser feitas pela Chefia.
           </p>
         </div>
 
