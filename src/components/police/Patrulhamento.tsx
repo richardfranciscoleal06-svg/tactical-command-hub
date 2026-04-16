@@ -281,11 +281,52 @@ export const Patrulhamento = () => {
                   {p.fim_timestamp ? new Date(p.fim_timestamp).toLocaleString('pt-BR') : '—'}
                   {p.horas_trabalhadas !== null && ` • ${p.horas_trabalhadas}h`}
                 </p>
+                {(p as Patrol & { relatorio?: string }).relatorio && (
+                  <p className="text-xs text-foreground/80 mt-2 p-2 rounded bg-muted/40 border border-tactical-border whitespace-pre-wrap">
+                    <span className="font-semibold">Relatório:</span> {(p as Patrol & { relatorio?: string }).relatorio}
+                  </p>
+                )}
               </div>
             </div>
           </Card>
         ))}
       </div>
+
+      <Dialog open={!!endingPatrol} onOpenChange={(open) => !open && setEndingPatrol(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="w-5 h-5 text-primary" /> Relatório de Patrulhamento
+            </DialogTitle>
+            <DialogDescription>
+              Faça um breve resumo sobre o patrulhamento. O envio do relatório é obrigatório para encerrar a patrulha.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label>Resumo do patrulhamento</Label>
+            <Textarea
+              value={relatorio}
+              onChange={(e) => setRelatorio(e.target.value)}
+              placeholder="Descreva ocorrências, áreas patrulhadas, abordagens realizadas, etc."
+              rows={6}
+              maxLength={2000}
+              className="bg-input border-tactical-border"
+            />
+            <p className="text-xs text-muted-foreground text-right">
+              {relatorio.trim().length}/2000 (mínimo 20)
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEndingPatrol(null)} disabled={submittingEnd}>
+              Cancelar
+            </Button>
+            <Button onClick={submitEnd} disabled={submittingEnd} className="gap-2">
+              {submittingEnd ? <Loader2 className="w-4 h-4 animate-spin" /> : <Square className="w-4 h-4" />}
+              Encerrar patrulha
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
