@@ -4,7 +4,9 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { UserPlus, BadgeCheck, Calendar, Hash, Loader2 } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { CARGOS } from '@/types/police';
+import { UserPlus, BadgeCheck, Calendar, Hash, Loader2, Briefcase } from 'lucide-react';
 import { toast } from 'sonner';
 
 export const PoliceRegistration = () => {
