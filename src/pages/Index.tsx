@@ -11,12 +11,10 @@ import { ChefiaDEC } from '@/components/police/ChefiaDEC';
 import UserApproval from '@/pages/UserApproval';
 
 const Index = () => {
-  const [activeTab, setActiveTab] = useState<TabType>('apf');
+  const [activeTab, setActiveTab] = useState<TabType>('patrulhamento');
 
   const renderContent = () => {
     switch (activeTab) {
-      case 'apf':
-        return <APFReport />;
       case 'patrulhamento':
         return <Patrulhamento />;
       case 'cadastro':
@@ -30,7 +28,7 @@ const Index = () => {
       case 'usuarios':
         return <UserApproval />;
       default:
-        return <APFReport />;
+        return <Patrulhamento />;
     }
   };
 
