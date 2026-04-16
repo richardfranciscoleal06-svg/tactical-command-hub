@@ -4,10 +4,12 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Car, Play, Square, Loader2, Clock, Users as UsersIcon, Hash, Shield } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Car, Play, Square, Loader2, Clock, Users as UsersIcon, Hash, Shield, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import { UNIDADES } from '@/types/police';
 
@@ -40,6 +42,9 @@ export const Patrulhamento = () => {
   const [unidade, setUnidade] = useState<string>('');
   const [assinatura, setAssinatura] = useState('');
   const [senhaViatura, setSenhaViatura] = useState('');
+  const [endingPatrol, setEndingPatrol] = useState<Patrol | null>(null);
+  const [relatorio, setRelatorio] = useState('');
+  const [submittingEnd, setSubmittingEnd] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -105,10 +110,26 @@ export const Patrulhamento = () => {
     setSenhaViatura('');
   };
 
-  const handleEnd = async (patrol: Patrol) => {
-    const inicio = new Date(patrol.inicio_timestamp).getTime();
-    const agora = Date.now();
-    const horas = +((agora - inicio) / 3600000).toFixed(2);
+  const openEndDialog = (patrol: Patrol) => {
+    setEndingPatrol(patrol);
+    setRelatorio('');
+  };
+
+  const submitEnd = async () => {
+    if (!endingPatrol) return;
+    const trimmed = relatorio.trim();
+    if (trimmed.length < 20) {
+      toast.error('O relatório deve ter pelo menos 20 caracteres.');
+      return;
+    }
+    if (trimmed.length > 2000) {
+      toast.error('O relatório deve ter no máximo 2000 caracteres.');
+      return;
+    }
+
+    setSubmittingEnd(true);
+    const inicio = new Date(endingPatrol.inicio_timestamp).getTime();
+    const horas = +((Date.now() - inicio) / 3600000).toFixed(2);
 
     const { error } = await supabase
       .from('patrols')
@@ -116,11 +137,15 @@ export const Patrulhamento = () => {
         fim_timestamp: new Date().toISOString(),
         horas_trabalhadas: horas,
         status: 'pending',
+        relatorio: trimmed,
       })
-      .eq('id', patrol.id);
+      .eq('id', endingPatrol.id);
+    setSubmittingEnd(false);
 
     if (error) return toast.error('Erro: ' + error.message);
     toast.success(`Patrulha encerrada (${horas}h)`);
+    setEndingPatrol(null);
+    setRelatorio('');
   };
 
   const officerName = (id: string) => officers.find(o => o.id === id)?.nome_completo || id;
@@ -226,8 +251,8 @@ export const Patrulhamento = () => {
                     Início: {new Date(p.inicio_timestamp).toLocaleString('pt-BR')}
                   </p>
                 </div>
-                <Button onClick={() => handleEnd(p)} variant="destructive" size="sm" className="gap-2">
-                  <Square className="w-4 h-4" /> Encerrar
+                <Button onClick={() => openEndDialog(p)} variant="destructive" size="sm" className="gap-2">
+                  <FileText className="w-4 h-4" /> Encerrar e enviar relatório
                 </Button>
               </div>
             </Card>
@@ -256,11 +281,52 @@ export const Patrulhamento = () => {
                   {p.fim_timestamp ? new Date(p.fim_timestamp).toLocaleString('pt-BR') : '—'}
                   {p.horas_trabalhadas !== null && ` • ${p.horas_trabalhadas}h`}
                 </p>
+                {(p as Patrol & { relatorio?: string }).relatorio && (
+                  <p className="text-xs text-foreground/80 mt-2 p-2 rounded bg-muted/40 border border-tactical-border whitespace-pre-wrap">
+                    <span className="font-semibold">Relatório:</span> {(p as Patrol & { relatorio?: string }).relatorio}
+                  </p>
+                )}
               </div>
             </div>
           </Card>
         ))}
       </div>
+
+      <Dialog open={!!endingPatrol} onOpenChange={(open) => !open && setEndingPatrol(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="w-5 h-5 text-primary" /> Relatório de Patrulhamento
+            </DialogTitle>
+            <DialogDescription>
+              Faça um breve resumo sobre o patrulhamento. O envio do relatório é obrigatório para encerrar a patrulha.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label>Resumo do patrulhamento</Label>
+            <Textarea
+              value={relatorio}
+              onChange={(e) => setRelatorio(e.target.value)}
+              placeholder="Descreva ocorrências, áreas patrulhadas, abordagens realizadas, etc."
+              rows={6}
+              maxLength={2000}
+              className="bg-input border-tactical-border"
+            />
+            <p className="text-xs text-muted-foreground text-right">
+              {relatorio.trim().length}/2000 (mínimo 20)
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEndingPatrol(null)} disabled={submittingEnd}>
+              Cancelar
+            </Button>
+            <Button onClick={submitEnd} disabled={submittingEnd} className="gap-2">
+              {submittingEnd ? <Loader2 className="w-4 h-4 animate-spin" /> : <Square className="w-4 h-4" />}
+              Encerrar patrulha
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

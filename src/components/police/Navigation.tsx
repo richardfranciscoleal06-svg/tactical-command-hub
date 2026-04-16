@@ -16,7 +16,6 @@ interface NavigationProps {
 }
 
 const tabs: { id: TabType; label: string; icon: React.ReactNode }[] = [
-  { id: 'apf', label: 'APF', icon: <FileText className="w-5 h-5" /> },
   { id: 'patrulhamento', label: 'Patrulhamento', icon: <Car className="w-5 h-5" /> },
   { id: 'cadastro', label: 'Cadastro', icon: <UserPlus className="w-5 h-5" /> },
   { id: 'administrativo', label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },

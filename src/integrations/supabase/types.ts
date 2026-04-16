@@ -77,6 +77,7 @@ export type Database = {
           id: string
           inicio_timestamp: string
           policiais: string[]
+          relatorio: string | null
           senha_viatura: string
           status: string
           unidade: string
@@ -91,6 +92,7 @@ export type Database = {
           id?: string
           inicio_timestamp?: string
           policiais?: string[]
+          relatorio?: string | null
           senha_viatura: string
           status?: string
           unidade: string
@@ -105,6 +107,7 @@ export type Database = {
           id?: string
           inicio_timestamp?: string
           policiais?: string[]
+          relatorio?: string | null
           senha_viatura?: string
           status?: string
           unidade?: string

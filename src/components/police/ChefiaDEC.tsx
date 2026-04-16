@@ -62,18 +62,14 @@ const ITEM_LABELS: Record<string, string> = {
   kevlar: 'Kevlar',
 };
 
-// Extended CARGOS for editing (all ranks)
+// Hierarquia de cargos do GER (do mais alto ao mais baixo)
 const ALL_CARGOS = [
-  'Delegado Geral',
-  'Delegado Geral Adjunto',
-  'Delegado Titular',
-  'Delegado Substituto',
-  'Inspetor',
-  'Escrivão',
-  'Agente Especial',
-  'Agente 1ª Classe',
-  'Agente 2ª Classe',
-  'Agente 3ª Classe',
+  'Diretor GER',
+  'Coordenador GER',
+  'Inspetor GER',
+  'Chefe de Equipe GER',
+  'Operador GER',
+  'Estagiário GER',
   'Agente Probatório',
 ];
 

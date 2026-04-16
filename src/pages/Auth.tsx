@@ -144,7 +144,7 @@ const Auth = () => {
             </div>
           </div>
           <h1 className="text-xl font-bold tracking-tight">
-            DEC <span className="text-primary">PCESP</span>
+            GER <span className="text-primary">PCESP</span>
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
             Sistema de Gestão Policial
