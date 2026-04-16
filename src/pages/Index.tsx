@@ -4,6 +4,7 @@ import { Header } from '@/components/police/Header';
 import { Navigation } from '@/components/police/Navigation';
 import { APFReport } from '@/components/police/APFReport';
 import { PoliceRegistration } from '@/components/police/PoliceRegistration';
+import { Patrulhamento } from '@/components/police/Patrulhamento';
 import { AdminDashboard } from '@/components/police/AdminDashboard';
 import { AdminSector } from '@/components/police/AdminSector';
 import { ChefiaDEC } from '@/components/police/ChefiaDEC';
@@ -16,6 +17,8 @@ const Index = () => {
     switch (activeTab) {
       case 'apf':
         return <APFReport />;
+      case 'patrulhamento':
+        return <Patrulhamento />;
       case 'cadastro':
         return <PoliceRegistration />;
       case 'administrativo':

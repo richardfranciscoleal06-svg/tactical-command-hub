@@ -5,7 +5,8 @@ import {
   LayoutDashboard, 
   Lock,
   Crown,
-  Users
+  Users,
+  Car
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -16,11 +17,12 @@ interface NavigationProps {
 
 const tabs: { id: TabType; label: string; icon: React.ReactNode }[] = [
   { id: 'apf', label: 'APF', icon: <FileText className="w-5 h-5" /> },
+  { id: 'patrulhamento', label: 'Patrulhamento', icon: <Car className="w-5 h-5" /> },
   { id: 'cadastro', label: 'Cadastro', icon: <UserPlus className="w-5 h-5" /> },
   { id: 'administrativo', label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
   { id: 'setor', label: 'Setor Admin', icon: <Lock className="w-5 h-5" /> },
   { id: 'usuarios', label: 'Usuários', icon: <Users className="w-5 h-5" /> },
-  { id: 'chefia', label: 'Chefia DEC', icon: <Crown className="w-5 h-5" /> },
+  { id: 'chefia', label: 'Chefia', icon: <Crown className="w-5 h-5" /> },
 ];
 
 export const Navigation = ({ activeTab, onTabChange }: NavigationProps) => {
