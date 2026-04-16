@@ -114,10 +114,15 @@ export const Patrulhamento = () => {
   const openEndDialog = (patrol: Patrol) => {
     setEndingPatrol(patrol);
     setRelatorio('');
+    setConfirmSenhaViatura('');
   };
 
   const submitEnd = async () => {
     if (!endingPatrol) return;
+    if (confirmSenhaViatura.trim() !== endingPatrol.senha_viatura) {
+      toast.error('Senha da viatura incorreta.');
+      return;
+    }
     const trimmed = relatorio.trim();
     if (trimmed.length < 20) {
       toast.error('O relatório deve ter pelo menos 20 caracteres.');
@@ -147,6 +152,7 @@ export const Patrulhamento = () => {
     toast.success(`Patrulha encerrada (${horas}h)`);
     setEndingPatrol(null);
     setRelatorio('');
+    setConfirmSenhaViatura('');
   };
 
   const officerName = (id: string) => officers.find(o => o.id === id)?.nome_completo || id;
