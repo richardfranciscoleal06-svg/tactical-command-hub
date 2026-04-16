@@ -44,6 +44,7 @@ export const Patrulhamento = () => {
   const [senhaViatura, setSenhaViatura] = useState('');
   const [endingPatrol, setEndingPatrol] = useState<Patrol | null>(null);
   const [relatorio, setRelatorio] = useState('');
+  const [confirmSenhaViatura, setConfirmSenhaViatura] = useState('');
   const [submittingEnd, setSubmittingEnd] = useState(false);
 
   useEffect(() => {
@@ -113,10 +114,15 @@ export const Patrulhamento = () => {
   const openEndDialog = (patrol: Patrol) => {
     setEndingPatrol(patrol);
     setRelatorio('');
+    setConfirmSenhaViatura('');
   };
 
   const submitEnd = async () => {
     if (!endingPatrol) return;
+    if (confirmSenhaViatura.trim() !== endingPatrol.senha_viatura) {
+      toast.error('Senha da viatura incorreta.');
+      return;
+    }
     const trimmed = relatorio.trim();
     if (trimmed.length < 20) {
       toast.error('O relatório deve ter pelo menos 20 caracteres.');
@@ -146,6 +152,7 @@ export const Patrulhamento = () => {
     toast.success(`Patrulha encerrada (${horas}h)`);
     setEndingPatrol(null);
     setRelatorio('');
+    setConfirmSenhaViatura('');
   };
 
   const officerName = (id: string) => officers.find(o => o.id === id)?.nome_completo || id;
@@ -302,19 +309,35 @@ export const Patrulhamento = () => {
               Faça um breve resumo sobre o patrulhamento. O envio do relatório é obrigatório para encerrar a patrulha.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-2">
-            <Label>Resumo do patrulhamento</Label>
-            <Textarea
-              value={relatorio}
-              onChange={(e) => setRelatorio(e.target.value)}
-              placeholder="Descreva ocorrências, áreas patrulhadas, abordagens realizadas, etc."
-              rows={6}
-              maxLength={2000}
-              className="bg-input border-tactical-border"
-            />
-            <p className="text-xs text-muted-foreground text-right">
-              {relatorio.trim().length}/2000 (mínimo 20)
-            </p>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                <Hash className="w-4 h-4 text-primary" />
+                Senha da Viatura (confirmação)
+              </Label>
+              <Input
+                type="password"
+                value={confirmSenhaViatura}
+                onChange={(e) => setConfirmSenhaViatura(e.target.value)}
+                placeholder="Digite a senha da viatura"
+                className="bg-input border-tactical-border font-mono"
+                autoComplete="off"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Resumo do patrulhamento</Label>
+              <Textarea
+                value={relatorio}
+                onChange={(e) => setRelatorio(e.target.value)}
+                placeholder="Descreva ocorrências, áreas patrulhadas, abordagens realizadas, etc."
+                rows={6}
+                maxLength={2000}
+                className="bg-input border-tactical-border"
+              />
+              <p className="text-xs text-muted-foreground text-right">
+                {relatorio.trim().length}/2000 (mínimo 20)
+              </p>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEndingPatrol(null)} disabled={submittingEnd}>
