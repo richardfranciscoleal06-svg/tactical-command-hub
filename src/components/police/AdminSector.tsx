@@ -131,16 +131,26 @@ export const AdminSector = () => {
         )
         .subscribe();
 
+      const patrolChannel = supabase
+        .channel('patrols-admin')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'patrols' },
+          () => loadPatrols()
+        )
+        .subscribe();
+
       return () => {
         supabase.removeChannel(apfChannel);
         supabase.removeChannel(policeChannel);
+        supabase.removeChannel(patrolChannel);
       };
     }
   }, [isAdmin]);
 
   const loadData = async () => {
     setLoading(true);
-    await Promise.all([loadPolice(), loadApfs()]);
+    await Promise.all([loadPolice(), loadApfs(), loadPatrols(), loadOfficersIndex()]);
     // Load logs from localStorage for now (could be migrated to Supabase later)
     const storedLogs = localStorage.getItem('pm19_logs');
     if (storedLogs) {
@@ -186,6 +196,33 @@ export const AdminSector = () => {
         ...apf,
         itens: apf.itens as Record<string, number>
       })));
+    }
+  };
+
+  const loadPatrols = async () => {
+    const { data, error } = await supabase
+      .from('patrols')
+      .select('*')
+      .eq('status', 'pending')
+      .order('fim_timestamp', { ascending: false });
+    if (!error && data) {
+      setPendingPatrols(data.map(p => ({
+        ...p,
+        itens: (p.itens as Record<string, number>) || {},
+        imagens_ilicitos: (p as { imagens_ilicitos?: string[] }).imagens_ilicitos || [],
+      })) as PatrolPending[]);
+    }
+  };
+
+  const loadOfficersIndex = async () => {
+    const { data } = await supabase
+      .from('police_officers')
+      .select('id, nome_completo')
+      .eq('status', 'approved');
+    if (data) {
+      const idx: Record<string, string> = {};
+      data.forEach(o => { idx[o.id] = o.nome_completo; });
+      setOfficersIndex(idx);
     }
   };
 
