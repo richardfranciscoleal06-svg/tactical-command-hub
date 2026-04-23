@@ -1,18 +1,21 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { 
-  LayoutDashboard, 
-  Users, 
+import {
+  LayoutDashboard,
+  Users,
   Package,
-  FileText,
+  Clock,
   DollarSign,
 } from 'lucide-react';
 
-interface APF {
+interface Patrol {
   id: string;
-  policial_nome: string;
-  itens: Record<string, number>;
+  user_id: string;
+  policiais: string[];
+  unidade: string;
+  horas_trabalhadas: number | null;
+  itens: Record<string, number> | null;
   status: string;
   created_at: string;
 }
@@ -49,44 +52,31 @@ const ITEM_LABELS: Record<string, string> = {
 export const AdminDashboard = () => {
   const { user } = useAuth();
   const [policiais, setPoliciais] = useState<PoliceOfficer[]>([]);
-  const [apfs, setApfs] = useState<APF[]>([]);
+  const [patrols, setPatrols] = useState<Patrol[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     loadData();
-    
-    // Subscribe to real-time APF changes
-    const apfChannel = supabase
-      .channel('apfs-dashboard')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'apfs' },
-        () => {
-          loadApfs();
-        }
-      )
+
+    const patrolChannel = supabase
+      .channel('patrols-dashboard')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'patrols' }, () => loadPatrols())
       .subscribe();
 
     const policeChannel = supabase
       .channel('police-dashboard')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'police_officers' },
-        () => {
-          loadPolice();
-        }
-      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'police_officers' }, () => loadPolice())
       .subscribe();
 
     return () => {
-      supabase.removeChannel(apfChannel);
+      supabase.removeChannel(patrolChannel);
       supabase.removeChannel(policeChannel);
     };
   }, [user]);
 
   const loadData = async () => {
     setLoading(true);
-    await Promise.all([loadPolice(), loadApfs()]);
+    await Promise.all([loadPolice(), loadPatrols()]);
     setLoading(false);
   };
 
@@ -95,47 +85,46 @@ export const AdminDashboard = () => {
       .from('police_officers')
       .select('*')
       .eq('status', 'approved');
-    
-    if (!error && data) {
-      setPoliciais(data);
-    }
+    if (!error && data) setPoliciais(data);
   };
 
-  const loadApfs = async () => {
+  const loadPatrols = async () => {
     const { data, error } = await supabase
-      .from('apfs')
+      .from('patrols')
       .select('*')
       .eq('status', 'approved');
-    
     if (!error && data) {
-      setApfs(data.map(apf => ({
-        ...apf,
-        itens: apf.itens as Record<string, number>
-      })));
+      setPatrols(data.map(p => ({
+        ...p,
+        itens: (p.itens as Record<string, number>) || {},
+      })) as Patrol[]);
     }
   };
 
-  // Calculate APFs per police officer
-  const apfsByPolicial = apfs.reduce((acc, apf) => {
-    acc[apf.policial_nome] = (acc[apf.policial_nome] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
+  // policial id -> total horas
+  const horasPorPolicialId: Record<string, number> = {};
+  patrols.forEach(p => {
+    const h = p.horas_trabalhadas || 0;
+    p.policiais.forEach(id => {
+      horasPorPolicialId[id] = (horasPorPolicialId[id] || 0) + h;
+    });
+  });
 
-  // Calculate total illegal items (all except dinheiroSujo)
-  const totalItensIlegais = apfs.reduce((total, apf) => {
-    return total + Object.entries(apf.itens)
+  const totalHoras = patrols.reduce((s, p) => s + (p.horas_trabalhadas || 0), 0);
+
+  const totalItensIlegais = patrols.reduce((total, p) => {
+    return total + Object.entries(p.itens || {})
       .filter(([key]) => key !== 'dinheiroSujo')
       .reduce((sum, [, value]) => sum + (value || 0), 0);
   }, 0);
 
-  // Calculate total dirty money
-  const totalDinheiroSujo = apfs.reduce((total, apf) => {
-    return total + (apf.itens.dinheiroSujo || 0);
-  }, 0);
+  const totalDinheiroSujo = patrols.reduce(
+    (total, p) => total + ((p.itens?.dinheiroSujo) || 0),
+    0
+  );
 
-  // Calculate seizure totals by category
-  const seizureTotals = apfs.reduce((acc, apf) => {
-    Object.entries(apf.itens).forEach(([key, value]) => {
+  const seizureTotals = patrols.reduce((acc, p) => {
+    Object.entries(p.itens || {}).forEach(([key, value]) => {
       acc[key] = (acc[key] || 0) + (value || 0);
     });
     return acc;
@@ -158,7 +147,7 @@ export const AdminDashboard = () => {
           </div>
           <div>
             <h2 className="text-xl font-semibold">Controle Administrativo</h2>
-            <p className="text-sm text-muted-foreground">Monitoramento de APFs e apreensões</p>
+            <p className="text-sm text-muted-foreground">Monitoramento de patrulhas e apreensões</p>
           </div>
         </div>
       </div>
@@ -179,11 +168,11 @@ export const AdminDashboard = () => {
         <div className="tactical-card p-6">
           <div className="flex items-center gap-3">
             <div className="p-3 rounded-lg bg-success/20">
-              <FileText className="w-6 h-6 text-success" />
+              <Clock className="w-6 h-6 text-success" />
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Total de APFs</p>
-              <p className="text-2xl font-bold font-mono">{apfs.length}</p>
+              <p className="text-sm text-muted-foreground">Horas Patrulhadas</p>
+              <p className="text-2xl font-bold font-mono">{totalHoras.toFixed(2)}h</p>
             </div>
           </div>
         </div>
@@ -213,11 +202,11 @@ export const AdminDashboard = () => {
         </div>
       </div>
 
-      {/* APFs per Police Officer */}
+      {/* Horas Patrulhadas por Policial */}
       <div className="tactical-card overflow-hidden">
         <div className="p-4 border-b border-tactical-border">
-          <h3 className="font-semibold">APFs por Policial</h3>
-          <p className="text-sm text-muted-foreground">Quantidade de APFs registrados por cada policial</p>
+          <h3 className="font-semibold">Horas Patrulhadas por Policial</h3>
+          <p className="text-sm text-muted-foreground">Total de horas em patrulhas aprovadas por cada policial</p>
         </div>
 
         <div className="overflow-x-auto">
@@ -227,7 +216,7 @@ export const AdminDashboard = () => {
                 <th className="text-left p-4 font-medium text-muted-foreground">Policial</th>
                 <th className="text-left p-4 font-medium text-muted-foreground">Cargo</th>
                 <th className="text-left p-4 font-medium text-muted-foreground">RG</th>
-                <th className="text-center p-4 font-medium text-muted-foreground">APFs</th>
+                <th className="text-center p-4 font-medium text-muted-foreground">Horas</th>
               </tr>
             </thead>
             <tbody>
@@ -239,18 +228,15 @@ export const AdminDashboard = () => {
                 </tr>
               ) : (
                 policiais.map(p => {
-                  const apfCount = apfsByPolicial[p.nome_completo] || 0;
-                  
+                  const h = horasPorPolicialId[p.id] || 0;
                   return (
                     <tr key={p.id} className="border-b border-tactical-border tactical-row transition-colors">
                       <td className="p-4 font-medium">{p.nome_completo}</td>
                       <td className="p-4 text-muted-foreground">{p.cargo}</td>
                       <td className="p-4 font-mono text-muted-foreground">{p.rg}</td>
                       <td className="p-4 text-center">
-                        <span className={`font-mono font-bold ${
-                          apfCount > 0 ? 'text-success' : 'text-muted-foreground'
-                        }`}>
-                          {apfCount}
+                        <span className={`font-mono font-bold ${h > 0 ? 'text-success' : 'text-muted-foreground'}`}>
+                          {h.toFixed(2)}h
                         </span>
                       </td>
                     </tr>
@@ -266,7 +252,7 @@ export const AdminDashboard = () => {
       <div className="tactical-card overflow-hidden">
         <div className="p-4 border-b border-tactical-border">
           <h3 className="font-semibold">Apreensões Totais</h3>
-          <p className="text-sm text-muted-foreground">Total de {apfs.length} APFs aprovados</p>
+          <p className="text-sm text-muted-foreground">Total de {patrols.length} patrulhas aprovadas</p>
         </div>
 
         <div className="overflow-x-auto">
@@ -278,74 +264,21 @@ export const AdminDashboard = () => {
               </tr>
             </thead>
             <tbody>
-              {Object.entries(seizureTotals).filter(([_, value]) => value > 0).length === 0 ? (
+              {Object.entries(seizureTotals).filter(([, value]) => value > 0).length === 0 ? (
                 <tr>
                   <td colSpan={2} className="p-8 text-center text-muted-foreground">
                     Nenhuma apreensão registrada
                   </td>
                 </tr>
               ) : (
-                <>
-                  {/* Drugs section */}
-                  {['sementeCannabis', 'cannabisNatura', 'fenilacetona', 'acidoCloridrico', 'metilamina', 'maconha', 'metanfetamina']
-                    .filter(key => seizureTotals[key] > 0)
-                    .map(key => (
-                      <tr key={key} className="border-b border-tactical-border tactical-row transition-colors">
-                        <td className="p-4">
-                          <span className="inline-flex items-center gap-2">
-                            <span className="w-2 h-2 rounded-full bg-purple-500"></span>
-                            {ITEM_LABELS[key]}
-                          </span>
-                        </td>
-                        <td className="p-4 text-center font-mono font-bold">{seizureTotals[key]}</td>
-                      </tr>
-                    ))}
-                  
-                  {/* Weapons section */}
-                  {['pecasArmas', 'fuzil', 'submetralhadora', 'pistola']
-                    .filter(key => seizureTotals[key] > 0)
-                    .map(key => (
-                      <tr key={key} className="border-b border-tactical-border tactical-row transition-colors">
-                        <td className="p-4">
-                          <span className="inline-flex items-center gap-2">
-                            <span className="w-2 h-2 rounded-full bg-red-500"></span>
-                            {ITEM_LABELS[key]}
-                          </span>
-                        </td>
-                        <td className="p-4 text-center font-mono font-bold">{seizureTotals[key]}</td>
-                      </tr>
-                    ))}
-                  
-                  {/* Ammo section */}
-                  {['municoes762', 'municoes556', 'municoes9mm']
-                    .filter(key => seizureTotals[key] > 0)
-                    .map(key => (
-                      <tr key={key} className="border-b border-tactical-border tactical-row transition-colors">
-                        <td className="p-4">
-                          <span className="inline-flex items-center gap-2">
-                            <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-                            {ITEM_LABELS[key]}
-                          </span>
-                        </td>
-                        <td className="p-4 text-center font-mono font-bold">{seizureTotals[key]}</td>
-                      </tr>
-                    ))}
-                  
-                  {/* Others section */}
-                  {['dinheiroSujo', 'coleteBalístico', 'lockpick', 'flipperZero', 'kevlar']
-                    .filter(key => seizureTotals[key] > 0)
-                    .map(key => (
-                      <tr key={key} className="border-b border-tactical-border tactical-row transition-colors">
-                        <td className="p-4">
-                          <span className="inline-flex items-center gap-2">
-                            <span className="w-2 h-2 rounded-full bg-blue-500"></span>
-                            {ITEM_LABELS[key]}
-                          </span>
-                        </td>
-                        <td className="p-4 text-center font-mono font-bold">{seizureTotals[key]}</td>
-                      </tr>
-                    ))}
-                </>
+                Object.entries(seizureTotals)
+                  .filter(([, v]) => v > 0)
+                  .map(([key, v]) => (
+                    <tr key={key} className="border-b border-tactical-border tactical-row transition-colors">
+                      <td className="p-4">{ITEM_LABELS[key] || key}</td>
+                      <td className="p-4 text-center font-mono font-bold">{v}</td>
+                    </tr>
+                  ))
               )}
             </tbody>
           </table>

@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { sanitizeUrl, isValidUrl } from '@/lib/urlValidator';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -25,7 +24,6 @@ import {
   Unlock, 
   Check, 
   X, 
-  Package, 
   UserPlus,
   History,
   Filter,
