@@ -75,7 +75,9 @@ export type Database = {
           fim_timestamp: string | null
           horas_trabalhadas: number | null
           id: string
+          imagens_ilicitos: string[]
           inicio_timestamp: string
+          itens: Json
           policiais: string[]
           relatorio: string | null
           senha_viatura: string
@@ -90,7 +92,9 @@ export type Database = {
           fim_timestamp?: string | null
           horas_trabalhadas?: number | null
           id?: string
+          imagens_ilicitos?: string[]
           inicio_timestamp?: string
+          itens?: Json
           policiais?: string[]
           relatorio?: string | null
           senha_viatura: string
@@ -105,7 +109,9 @@ export type Database = {
           fim_timestamp?: string | null
           horas_trabalhadas?: number | null
           id?: string
+          imagens_ilicitos?: string[]
           inicio_timestamp?: string
+          itens?: Json
           policiais?: string[]
           relatorio?: string | null
           senha_viatura?: string
