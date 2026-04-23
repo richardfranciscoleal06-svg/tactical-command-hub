@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { TabType } from '@/types/police';
 import { Header } from '@/components/police/Header';
 import { Navigation } from '@/components/police/Navigation';
-import { APFReport } from '@/components/police/APFReport';
 import { PoliceRegistration } from '@/components/police/PoliceRegistration';
 import { Patrulhamento } from '@/components/police/Patrulhamento';
 import { AdminDashboard } from '@/components/police/AdminDashboard';
