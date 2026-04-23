@@ -258,6 +258,15 @@ export const AdminSector = () => {
         toast.error('Erro ao atualizar APF');
         return;
       }
+    } else if (type === 'patrol') {
+      const { error } = await supabase
+        .from('patrols')
+        .update({ status })
+        .eq('id', id);
+      if (error) {
+        toast.error('Erro ao atualizar patrulha');
+        return;
+      }
     } else {
       const { error } = await supabase
         .from('police_officers')
