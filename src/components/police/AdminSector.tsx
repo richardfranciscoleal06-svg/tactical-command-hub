@@ -227,7 +227,7 @@ export const AdminSector = () => {
   };
 
   const openApprovalModal = (
-    type: 'apf' | 'registration',
+    type: 'apf' | 'registration' | 'patrol',
     id: string,
     action: 'approve' | 'reject',
     description: string
