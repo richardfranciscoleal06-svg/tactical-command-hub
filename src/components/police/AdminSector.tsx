@@ -30,7 +30,10 @@ import {
   History,
   Filter,
   ShieldAlert,
-  Loader2
+  Loader2,
+  Car,
+  FileText,
+  Image as ImageIcon
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -54,6 +57,21 @@ interface APF {
   tempo_prisao: number;
   itens: Record<string, number>;
   url_comprovacao: string;
+  status: string;
+  created_at: string;
+}
+
+interface PatrolPending {
+  id: string;
+  user_id: string;
+  policiais: string[];
+  unidade: string;
+  inicio_timestamp: string;
+  fim_timestamp: string | null;
+  horas_trabalhadas: number | null;
+  relatorio: string | null;
+  itens: Record<string, number> | null;
+  imagens_ilicitos: string[] | null;
   status: string;
   created_at: string;
 }
