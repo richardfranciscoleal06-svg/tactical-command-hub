@@ -390,90 +390,77 @@ export const AdminSector = () => {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="seizures" className="space-y-4">
-          {pendingApfs.length === 0 ? (
+        <TabsContent value="patrols" className="space-y-4">
+          {pendingPatrols.length === 0 ? (
             <div className="tactical-card p-8 text-center text-muted-foreground">
-              <Package className="w-12 h-12 mx-auto mb-4 opacity-50" />
-              Nenhum APF pendente
+              <Car className="w-12 h-12 mx-auto mb-4 opacity-50" />
+              Nenhuma patrulha pendente de análise
             </div>
           ) : (
-            pendingApfs.map(apf => {
-              const totalItens = Object.entries(apf.itens)
+            pendingPatrols.map(p => {
+              const totalItens = Object.entries(p.itens || {})
                 .filter(([key]) => key !== 'dinheiroSujo')
-                .reduce((sum, [, value]) => sum + (value || 0), 0);
+                .reduce((sum, [, v]) => sum + (v || 0), 0);
+              const dinheiro = (p.itens?.dinheiroSujo) || 0;
+              const nomes = p.policiais.map(id => officersIndex[id] || id).join(', ');
               return (
-                <div key={apf.id} className="tactical-card p-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1">
-                      <p className="font-semibold">{apf.policial_nome}</p>
-                      
-                      {/* Informações do Indivíduo */}
-                      <div className="mt-2 p-2 bg-destructive/10 rounded border border-destructive/30">
-                        <p className="text-sm font-medium text-destructive">Indivíduo Apreendido:</p>
-                        <p className="text-sm">{apf.nome_individuo} - RG: {apf.rg_individuo}</p>
+                <div key={p.id} className="tactical-card p-4">
+                  <div className="flex items-start justify-between gap-4 flex-wrap">
+                    <div className="flex-1 min-w-0 space-y-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-semibold">Unidade {p.unidade}</span>
+                        <span className="text-xs px-2 py-0.5 rounded bg-warning/20 text-warning">PENDENTE</span>
+                        {p.horas_trabalhadas !== null && (
+                          <span className="text-xs font-mono text-muted-foreground">{p.horas_trabalhadas}h</span>
+                        )}
                       </div>
-                      
-                      {/* Policiais da QRU */}
-                      {apf.policiais_qru && (
-                        <div className="mt-2 p-2 bg-muted/30 rounded border border-tactical-border">
-                          <p className="text-sm font-medium text-primary">Policiais da QRU:</p>
-                          <p className="text-sm text-muted-foreground">{apf.policiais_qru}</p>
+                      <p className="text-sm"><span className="text-muted-foreground">Policiais:</span> {nomes}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatDate(p.inicio_timestamp)} → {p.fim_timestamp ? formatDate(p.fim_timestamp) : '—'}
+                      </p>
+                      {p.relatorio && (
+                        <div className="p-3 rounded bg-primary/5 border border-primary/30">
+                          <p className="text-sm font-medium text-primary flex items-center gap-1">
+                            <FileText className="w-4 h-4" /> Relatório:
+                          </p>
+                          <p className="text-sm text-muted-foreground whitespace-pre-wrap">{p.relatorio}</p>
                         </div>
                       )}
-                      
-                      {/* Informações da QRU */}
-                      <div className="mt-2 p-3 bg-primary/5 rounded border border-primary/30">
-                        <p className="text-sm font-medium text-primary">Informações da Ocorrência (QRU):</p>
-                        <p className="text-sm text-muted-foreground whitespace-pre-wrap">{apf.informacoes_qru}</p>
-                      </div>
-                      
-                      {/* Artigos */}
-                      {apf.artigos && apf.artigos.length > 0 && (
-                        <div className="mt-2">
-                          <p className="text-sm font-medium">Artigos: <span className="text-primary">{apf.artigos.join(', ')}</span></p>
-                          <p className="text-sm text-warning">Tempo de prisão: {apf.tempo_prisao} minutos</p>
+                      {totalItens > 0 || dinheiro > 0 ? (
+                        <p className="text-sm text-muted-foreground">
+                          {totalItens} itens ilegais{dinheiro > 0 && ` • $${dinheiro.toLocaleString()} dinheiro sujo`}
+                        </p>
+                      ) : null}
+                      {p.imagens_ilicitos && p.imagens_ilicitos.length > 0 && (
+                        <div className="space-y-1">
+                          <p className="text-xs text-muted-foreground flex items-center gap-1">
+                            <ImageIcon className="w-3 h-3" /> Imagens dos ilícitos:
+                          </p>
+                          <div className="flex gap-2 flex-wrap">
+                            {p.imagens_ilicitos.map((url, i) => (
+                              <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                                <img src={url} alt={`Ilícito ${i+1}`} className="w-20 h-20 object-cover rounded border border-tactical-border" />
+                              </a>
+                            ))}
+                          </div>
                         </div>
                       )}
-                      
-                      <p className="text-sm text-muted-foreground mt-2">
-                        {totalItens} itens ilegais • ${apf.itens.dinheiroSujo || 0} dinheiro sujo
-                      </p>
-                      {apf.url_comprovacao && isValidUrl(apf.url_comprovacao) && (
-                        <a 
-                          href={sanitizeUrl(apf.url_comprovacao)} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="text-sm text-primary hover:underline"
-                        >
-                          Ver comprovação
-                        </a>
-                      )}
-                      {apf.url_comprovacao && !isValidUrl(apf.url_comprovacao) && (
-                        <span className="text-sm text-destructive">
-                          URL de comprovação inválida
-                        </span>
-                      )}
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {formatDate(apf.created_at)}
-                      </p>
                     </div>
                     <div className="flex gap-2">
                       <Button
                         size="sm"
-                        onClick={() => openApprovalModal('apf', apf.id, 'approve', `APF de ${apf.policial_nome}`)}
+                        onClick={() => openApprovalModal('patrol', p.id, 'approve', `Patrulha unidade ${p.unidade}`)}
                         className="gap-1"
                       >
-                        <Check className="w-4 h-4" />
-                        Aceitar
+                        <Check className="w-4 h-4" /> Aceitar
                       </Button>
                       <Button
                         size="sm"
                         variant="destructive"
-                        onClick={() => openApprovalModal('apf', apf.id, 'reject', `APF de ${apf.policial_nome}`)}
+                        onClick={() => openApprovalModal('patrol', p.id, 'reject', `Patrulha unidade ${p.unidade}`)}
                         className="gap-1"
                       >
-                        <X className="w-4 h-4" />
-                        Negar
+                        <X className="w-4 h-4" /> Negar
                       </Button>
                     </div>
                   </div>
