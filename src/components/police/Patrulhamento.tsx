@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
-import { Car, Play, Square, Loader2, Clock, Users as UsersIcon, Hash, Shield, FileText } from 'lucide-react';
+import { Car, Play, Square, Loader2, Clock, Users as UsersIcon, Hash, Shield, FileText, Camera, X, Upload, Package } from 'lucide-react';
 import { toast } from 'sonner';
 import { UNIDADES } from '@/types/police';
 
@@ -24,6 +24,9 @@ interface Patrol {
   fim_timestamp: string | null;
   horas_trabalhadas: number | null;
   status: string;
+  relatorio?: string | null;
+  itens?: Record<string, number> | null;
+  imagens_ilicitos?: string[] | null;
 }
 
 interface Officer {
@@ -32,6 +35,33 @@ interface Officer {
   rg: string;
   cargo: string;
 }
+
+const ITENS_LABELS: Record<string, string> = {
+  sementeCannabis: 'Semente de Cannabis',
+  cannabisNatura: 'Cannabis in natura',
+  fenilacetona: 'Fenilacetona',
+  acidoCloridrico: 'Ácido clorídrico',
+  metilamina: 'Metilamina',
+  maconha: 'Maconha',
+  metanfetamina: 'Metanfetamina',
+  pecasArmas: 'Peças de Armas',
+  fuzil: 'Fuzil',
+  submetralhadora: 'Submetralhadora',
+  pistola: 'Pistola',
+  municoes762: 'Munições 762mm',
+  municoes556: 'Munições 556mm',
+  municoes9mm: 'Munições 9mm',
+  dinheiroSujo: 'Dinheiro sujo',
+  coleteBalístico: 'Colete Balístico',
+  lockpick: 'Lockpick',
+  flipperZero: 'Flipper Zero',
+  kevlar: 'Kevlar',
+};
+
+const defaultItens: Record<string, number> = Object.keys(ITENS_LABELS).reduce(
+  (acc, k) => ({ ...acc, [k]: 0 }),
+  {}
+);
 
 export const Patrulhamento = () => {
   const { user } = useAuth();
@@ -46,6 +76,10 @@ export const Patrulhamento = () => {
   const [relatorio, setRelatorio] = useState('');
   const [confirmSenhaViatura, setConfirmSenhaViatura] = useState('');
   const [submittingEnd, setSubmittingEnd] = useState(false);
+  const [endItens, setEndItens] = useState<Record<string, number>>(defaultItens);
+  const [endImagens, setEndImagens] = useState<string[]>([]);
+  const [uploadingImg, setUploadingImg] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     loadData();
@@ -75,7 +109,7 @@ export const Patrulhamento = () => {
       .select('*')
       .order('inicio_timestamp', { ascending: false })
       .limit(50);
-    setPatrols((data as Patrol[]) || []);
+    setPatrols((data as unknown as Patrol[]) || []);
   };
 
   const togglePolicial = (id: string) => {
@@ -84,6 +118,8 @@ export const Patrulhamento = () => {
     );
   };
 
+  const activeUnits = new Set(patrols.filter(p => p.status === 'active').map(p => p.unidade));
+
   const handleStart = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
@@ -91,6 +127,9 @@ export const Patrulhamento = () => {
     if (!unidade) return toast.error('Selecione a unidade');
     if (!assinatura.trim()) return toast.error('Assinatura obrigatória');
     if (!senhaViatura.trim()) return toast.error('Senha da viatura obrigatória');
+    if (activeUnits.has(unidade)) {
+      return toast.error(`A unidade ${unidade} já está em rua. Aguarde o encerramento.`);
+    }
 
     setLoading(true);
     const { error } = await supabase.from('patrols').insert({
@@ -103,7 +142,12 @@ export const Patrulhamento = () => {
     });
     setLoading(false);
 
-    if (error) return toast.error('Erro: ' + error.message);
+    if (error) {
+      if (error.code === '23505') {
+        return toast.error(`A unidade ${unidade} já está em rua.`);
+      }
+      return toast.error('Erro: ' + error.message);
+    }
     toast.success('Patrulha iniciada!');
     setSelectedPoliciais([]);
     setUnidade('');
@@ -115,6 +159,45 @@ export const Patrulhamento = () => {
     setEndingPatrol(patrol);
     setRelatorio('');
     setConfirmSenhaViatura('');
+    setEndItens(defaultItens);
+    setEndImagens([]);
+  };
+
+  const handleItemChange = (key: string, value: string) => {
+    const n = parseInt(value) || 0;
+    setEndItens(prev => ({ ...prev, [key]: Math.max(0, n) }));
+  };
+
+  const handleUploadImages = async (files: FileList | null) => {
+    if (!files || files.length === 0 || !user) return;
+    setUploadingImg(true);
+    const uploaded: string[] = [];
+    for (const file of Array.from(files)) {
+      if (!file.type.startsWith('image/')) {
+        toast.error(`${file.name}: não é uma imagem`);
+        continue;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error(`${file.name}: máximo 5MB`);
+        continue;
+      }
+      const ext = file.name.split('.').pop();
+      const path = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+      const { error } = await supabase.storage.from('patrol-ilicitos').upload(path, file);
+      if (error) {
+        toast.error(`Erro: ${error.message}`);
+        continue;
+      }
+      const { data } = supabase.storage.from('patrol-ilicitos').getPublicUrl(path);
+      uploaded.push(data.publicUrl);
+    }
+    setEndImagens(prev => [...prev, ...uploaded]);
+    setUploadingImg(false);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const removeImage = (url: string) => {
+    setEndImagens(prev => prev.filter(u => u !== url));
   };
 
   const submitEnd = async () => {
@@ -144,6 +227,8 @@ export const Patrulhamento = () => {
         horas_trabalhadas: horas,
         status: 'pending',
         relatorio: trimmed,
+        itens: endItens,
+        imagens_ilicitos: endImagens,
       })
       .eq('id', endingPatrol.id);
     setSubmittingEnd(false);
@@ -151,12 +236,9 @@ export const Patrulhamento = () => {
     if (error) return toast.error('Erro: ' + error.message);
     toast.success(`Patrulha encerrada (${horas}h)`);
     setEndingPatrol(null);
-    setRelatorio('');
-    setConfirmSenhaViatura('');
   };
 
   const officerName = (id: string) => officers.find(o => o.id === id)?.nome_completo || id;
-
   const myActivePatrols = patrols.filter(p => p.user_id === user?.id && p.status === 'active');
 
   return (
@@ -209,7 +291,11 @@ export const Patrulhamento = () => {
                 <SelectValue placeholder="Selecione" />
               </SelectTrigger>
               <SelectContent>
-                {UNIDADES.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                {UNIDADES.map(u => (
+                  <SelectItem key={u} value={u} disabled={activeUnits.has(u)}>
+                    {u}{activeUnits.has(u) ? ' (em rua)' : ''}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -218,10 +304,12 @@ export const Patrulhamento = () => {
               <Hash className="w-4 h-4 text-primary" /> Senha da Viatura
             </Label>
             <Input
+              type="password"
               value={senhaViatura}
               onChange={(e) => setSenhaViatura(e.target.value)}
               className="bg-input border-tactical-border font-mono"
               disabled={loading}
+              autoComplete="new-password"
             />
           </div>
           <div>
@@ -250,7 +338,7 @@ export const Patrulhamento = () => {
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
                     <Badge variant="outline" className="border-success text-success">ATIVA</Badge>
-                    <span className="text-sm font-mono">Unidade {p.unidade} • Viatura {p.senha_viatura}</span>
+                    <span className="text-sm font-mono">Unidade {p.unidade}</span>
                   </div>
                   <p className="text-sm">{p.policiais.map(officerName).join(', ')}</p>
                   <p className="text-xs text-muted-foreground flex items-center gap-1">
@@ -275,12 +363,12 @@ export const Patrulhamento = () => {
         {patrols.filter(p => p.status !== 'active').slice(0, 20).map(p => (
           <Card key={p.id} className="p-4">
             <div className="flex items-start justify-between gap-4 flex-wrap">
-              <div className="space-y-1">
+              <div className="space-y-1 flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <Badge variant={p.status === 'approved' ? 'default' : p.status === 'rejected' ? 'destructive' : 'secondary'}>
                     {p.status.toUpperCase()}
                   </Badge>
-                  <span className="text-sm font-mono">Unidade {p.unidade} • Viatura {p.senha_viatura}</span>
+                  <span className="text-sm font-mono">Unidade {p.unidade}</span>
                 </div>
                 <p className="text-sm">{p.policiais.map(officerName).join(', ')}</p>
                 <p className="text-xs text-muted-foreground">
@@ -288,10 +376,19 @@ export const Patrulhamento = () => {
                   {p.fim_timestamp ? new Date(p.fim_timestamp).toLocaleString('pt-BR') : '—'}
                   {p.horas_trabalhadas !== null && ` • ${p.horas_trabalhadas}h`}
                 </p>
-                {(p as Patrol & { relatorio?: string }).relatorio && (
+                {p.relatorio && (
                   <p className="text-xs text-foreground/80 mt-2 p-2 rounded bg-muted/40 border border-tactical-border whitespace-pre-wrap">
-                    <span className="font-semibold">Relatório:</span> {(p as Patrol & { relatorio?: string }).relatorio}
+                    <span className="font-semibold">Relatório:</span> {p.relatorio}
                   </p>
+                )}
+                {p.imagens_ilicitos && p.imagens_ilicitos.length > 0 && (
+                  <div className="flex gap-2 flex-wrap mt-2">
+                    {p.imagens_ilicitos.map((url, i) => (
+                      <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                        <img src={url} alt={`Ilícito ${i+1}`} className="w-16 h-16 object-cover rounded border border-tactical-border" />
+                      </a>
+                    ))}
+                  </div>
                 )}
               </div>
             </div>
@@ -300,13 +397,13 @@ export const Patrulhamento = () => {
       </div>
 
       <Dialog open={!!endingPatrol} onOpenChange={(open) => !open && setEndingPatrol(null)}>
-        <DialogContent>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <FileText className="w-5 h-5 text-primary" /> Relatório de Patrulhamento
+              <FileText className="w-5 h-5 text-primary" /> Encerrar Patrulhamento
             </DialogTitle>
             <DialogDescription>
-              Faça um breve resumo sobre o patrulhamento. O envio do relatório é obrigatório para encerrar a patrulha.
+              Informe a senha da viatura, escreva um breve relatório, registre os ilícitos apreendidos e anexe imagens.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -324,19 +421,80 @@ export const Patrulhamento = () => {
                 autoComplete="off"
               />
             </div>
+
             <div className="space-y-2">
-              <Label>Resumo do patrulhamento</Label>
+              <Label>Relatório do patrulhamento *</Label>
               <Textarea
                 value={relatorio}
                 onChange={(e) => setRelatorio(e.target.value)}
                 placeholder="Descreva ocorrências, áreas patrulhadas, abordagens realizadas, etc."
-                rows={6}
+                rows={5}
                 maxLength={2000}
                 className="bg-input border-tactical-border"
               />
               <p className="text-xs text-muted-foreground text-right">
                 {relatorio.trim().length}/2000 (mínimo 20)
               </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                <Package className="w-4 h-4 text-primary" /> Itens Ilícitos Apreendidos
+              </Label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 p-3 border border-tactical-border rounded-lg bg-input/40 max-h-64 overflow-y-auto">
+                {Object.entries(ITENS_LABELS).map(([key, label]) => (
+                  <div key={key}>
+                    <Label className="text-xs text-muted-foreground">{label}</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      value={endItens[key]}
+                      onChange={(e) => handleItemChange(key, e.target.value)}
+                      className="mt-1 h-8 bg-input border-tactical-border font-mono text-sm"
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                <Camera className="w-4 h-4 text-primary" /> Imagens dos ilícitos
+              </Label>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={(e) => handleUploadImages(e.target.files)}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadingImg}
+                className="gap-2 w-full"
+              >
+                {uploadingImg ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                Enviar imagens
+              </Button>
+              {endImagens.length > 0 && (
+                <div className="flex gap-2 flex-wrap">
+                  {endImagens.map((url, i) => (
+                    <div key={i} className="relative group">
+                      <img src={url} alt={`Img ${i+1}`} className="w-20 h-20 object-cover rounded border border-tactical-border" />
+                      <button
+                        type="button"
+                        onClick={() => removeImage(url)}
+                        className="absolute -top-2 -right-2 bg-destructive text-destructive-foreground rounded-full p-0.5"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
           <DialogFooter>
