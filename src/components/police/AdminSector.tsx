@@ -364,14 +364,14 @@ export const AdminSector = () => {
         </div>
       </div>
 
-      <Tabs defaultValue="seizures" className="space-y-4">
+      <Tabs defaultValue="patrols" className="space-y-4">
         <TabsList className="bg-muted/50 border border-tactical-border">
-          <TabsTrigger value="seizures" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-            <Package className="w-4 h-4" />
-            APFs
-            {pendingApfs.length > 0 && (
+          <TabsTrigger value="patrols" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+            <Car className="w-4 h-4" />
+            Análise de Patrulhamento
+            {pendingPatrols.length > 0 && (
               <span className="ml-1 px-1.5 py-0.5 text-xs rounded-full bg-warning text-warning-foreground">
-                {pendingApfs.length}
+                {pendingPatrols.length}
               </span>
             )}
           </TabsTrigger>
