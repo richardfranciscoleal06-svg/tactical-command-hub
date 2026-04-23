@@ -92,13 +92,15 @@ export const AdminSector = () => {
   // Data
   const [pendingPolice, setPendingPolice] = useState<PoliceOfficer[]>([]);
   const [pendingApfs, setPendingApfs] = useState<APF[]>([]);
+  const [pendingPatrols, setPendingPatrols] = useState<PatrolPending[]>([]);
+  const [officersIndex, setOfficersIndex] = useState<Record<string, string>>({});
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [filterOficial, setFilterOficial] = useState<string>('all');
   
   // Modal
   const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [approvalData, setApprovalData] = useState<{
-    type: 'apf' | 'registration';
+    type: 'apf' | 'registration' | 'patrol';
     id: string;
     action: 'approve' | 'reject';
     description: string;
