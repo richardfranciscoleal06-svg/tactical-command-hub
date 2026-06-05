@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, ReactNode } from 'react
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { logger } from '@/lib/logger';
+import type { SectorValue } from '@/types/police';
 
 type UserStatus = 'pending' | 'approved' | 'rejected' | null;
 
@@ -11,7 +12,10 @@ interface AuthContextType {
   userStatus: UserStatus;
   isLoading: boolean;
   isAdmin: boolean;
-  signUp: (usernameAsEmail: string, password: string, username: string, justification: string) => Promise<{ error: any }>;
+  isAnyAdmin: boolean;
+  adminSector: SectorValue | null;
+  currentSector: SectorValue | null;
+  signUp: (usernameAsEmail: string, password: string, username: string, justification: string, sector: SectorValue) => Promise<{ error: any }>;
   signIn: (username: string, password: string) => Promise<{ error: any; status?: UserStatus }>;
   signOut: () => Promise<void>;
   refreshUserStatus: () => Promise<void>;
@@ -33,12 +37,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [userStatus, setUserStatus] = useState<UserStatus>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isAnyAdmin, setIsAnyAdmin] = useState(false);
+  const [adminSector, setAdminSector] = useState<SectorValue | null>(null);
+  const [currentSector, setCurrentSector] = useState<SectorValue | null>(null);
 
   const fetchUserStatus = async (userId: string) => {
     try {
       const { data: profile, error } = await supabase
         .from('profiles')
-        .select('status')
+        .select('status, sector')
         .eq('user_id', userId)
         .maybeSingle();
 
@@ -47,6 +54,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return null;
       }
 
+      setCurrentSector(((profile as any)?.sector ?? null) as SectorValue | null);
       return profile?.status as UserStatus;
     } catch (error) {
       logger.error('Error in fetchUserStatus:', error);
@@ -54,24 +62,28 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const fetchIsAdmin = async (userId: string) => {
+  const fetchRoles = async (userId: string) => {
     try {
       const { data, error } = await supabase
         .from('user_roles')
-        .select('role')
-        .eq('user_id', userId)
-        .eq('role', 'admin')
-        .maybeSingle();
+        .select('role, sector')
+        .eq('user_id', userId);
 
       if (error) {
         logger.error('Error fetching admin status:', error);
-        return false;
+        return { isAdmin: false, isAnyAdmin: false, adminSector: null as SectorValue | null };
       }
-
-      return !!data;
+      const rows = (data || []) as { role: string; sector: SectorValue | null }[];
+      const isAdmin = rows.some(r => r.role === 'admin');
+      const sectorAdminRow = rows.find(r => r.role === 'sector_admin');
+      return {
+        isAdmin,
+        isAnyAdmin: isAdmin || !!sectorAdminRow,
+        adminSector: sectorAdminRow?.sector ?? null,
+      };
     } catch (error) {
-      logger.error('Error in fetchIsAdmin:', error);
-      return false;
+      logger.error('Error in fetchRoles:', error);
+      return { isAdmin: false, isAnyAdmin: false, adminSector: null as SectorValue | null };
     }
   };
 
@@ -79,8 +91,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (user) {
       const status = await fetchUserStatus(user.id);
       setUserStatus(status);
-      const adminStatus = await fetchIsAdmin(user.id);
-      setIsAdmin(adminStatus);
+      const r = await fetchRoles(user.id);
+      setIsAdmin(r.isAdmin);
+      setIsAnyAdmin(r.isAnyAdmin);
+      setAdminSector(r.adminSector);
     }
   };
 
@@ -95,11 +109,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         if (session?.user) {
           setTimeout(() => {
             fetchUserStatus(session.user.id).then(setUserStatus);
-            fetchIsAdmin(session.user.id).then(setIsAdmin);
+            fetchRoles(session.user.id).then(r => {
+              setIsAdmin(r.isAdmin);
+              setIsAnyAdmin(r.isAnyAdmin);
+              setAdminSector(r.adminSector);
+            });
           }, 0);
         } else {
           setUserStatus(null);
           setIsAdmin(false);
+          setIsAnyAdmin(false);
+          setAdminSector(null);
+          setCurrentSector(null);
         }
       }
     );
@@ -112,10 +133,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (session?.user) {
         Promise.all([
           fetchUserStatus(session.user.id),
-          fetchIsAdmin(session.user.id)
-        ]).then(([status, admin]) => {
+          fetchRoles(session.user.id)
+        ]).then(([status, r]) => {
           setUserStatus(status);
-          setIsAdmin(admin);
+          setIsAdmin(r.isAdmin);
+          setIsAnyAdmin(r.isAnyAdmin);
+          setAdminSector(r.adminSector);
           setIsLoading(false);
         });
       } else {
@@ -130,7 +153,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     usernameAsEmail: string,
     password: string,
     username: string,
-    justification: string
+    justification: string,
+    sector: SectorValue
   ) => {
     // Use username as a fake email for Supabase auth
     const fakeEmail = `${usernameAsEmail.toLowerCase().replace(/[^a-z0-9]/g, '')}@dec.pcesp.local`;
@@ -157,7 +181,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           username,
           justification,
           proof_url: null,
-          status: 'pending'
+          status: 'pending',
+          sector,
         });
 
       if (profileError) {
@@ -200,8 +225,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return { error: { message: 'Seu acesso foi negado pelo Setor Admin.' }, status: 'rejected' as UserStatus };
       }
 
-      const adminStatus = await fetchIsAdmin(data.user.id);
-      setIsAdmin(adminStatus);
+      const r = await fetchRoles(data.user.id);
+      setIsAdmin(r.isAdmin);
+      setIsAnyAdmin(r.isAnyAdmin);
+      setAdminSector(r.adminSector);
     }
 
     return { error: null, status: 'approved' as UserStatus };
@@ -223,6 +250,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setSession(null);
     setUserStatus(null);
     setIsAdmin(false);
+    setIsAnyAdmin(false);
+    setAdminSector(null);
+    setCurrentSector(null);
   };
 
   return (
@@ -232,6 +262,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       userStatus,
       isLoading,
       isAdmin,
+      isAnyAdmin,
+      adminSector,
+      currentSector,
       signUp,
       signIn,
       signOut,

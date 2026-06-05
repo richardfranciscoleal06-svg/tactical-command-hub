@@ -1,11 +1,13 @@
 import { Shield, LogOut } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { sectorLabel } from '@/types/police';
 
 export const Header = () => {
-  const { user, signOut } = useAuth();
+  const { user, signOut, currentSector, isAdmin, adminSector } = useAuth();
   const navigate = useNavigate();
 
   const handleLogout = async () => {
@@ -24,13 +26,18 @@ export const Header = () => {
           </div>
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-glow">
-              SISTEMA POLICIAL
+              POLÍCIA MILITAR - SP
             </h1>
             <p className="text-sm text-muted-foreground font-mono">
-              GRUPO ESPECIAL DE REAÇÃO - PCESP
+              Sistema de Gestão Operacional
             </p>
           </div>
           <div className="ml-auto flex items-center gap-4">
+            {user && (currentSector || adminSector || isAdmin) && (
+              <Badge variant="outline" className="hidden md:inline-flex border-primary/40 text-primary font-mono">
+                {isAdmin ? 'TODOS OS SETORES' : sectorLabel(adminSector ?? currentSector)}
+              </Badge>
+            )}
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
               <span className="text-xs font-mono text-muted-foreground">

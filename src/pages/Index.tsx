@@ -47,7 +47,7 @@ const Index = () => {
       <footer className="border-t border-tactical-border mt-8 py-4">
         <div className="container mx-auto px-4 text-center">
           <p className="text-xs text-muted-foreground font-mono">
-            SISTEMA POLICIAL • GER PCESP • v1.0.0
+            POLÍCIA MILITAR - SP • Sistema Operacional • v2.0.0
           </p>
         </div>
       </footer>
