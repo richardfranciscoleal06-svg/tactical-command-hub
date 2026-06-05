@@ -62,16 +62,9 @@ const ITEM_LABELS: Record<string, string> = {
   kevlar: 'Kevlar',
 };
 
-// Hierarquia de cargos do GER (do mais alto ao mais baixo)
-const ALL_CARGOS = [
-  'Diretor GER',
-  'Coordenador GER',
-  'Inspetor GER',
-  'Chefe de Equipe GER',
-  'Operador GER',
-  'Estagiário GER',
-  'Agente Probatório',
-];
+import { CARGOS } from '@/types/police';
+// Hierarquia PM-SP (alto → baixo)
+const ALL_CARGOS = [...CARGOS].reverse();
 
 interface PoliceOfficer {
   id: string;
@@ -102,7 +95,7 @@ interface APF {
 }
 
 export const ChefiaDEC = () => {
-  const { isAdmin, isLoading: authLoading } = useAuth();
+  const { isAnyAdmin: isAdmin, isLoading: authLoading } = useAuth();
   const [canReset, setCanReset] = useState(false);
   const [pdfGenerated, setPdfGenerated] = useState(false);
   

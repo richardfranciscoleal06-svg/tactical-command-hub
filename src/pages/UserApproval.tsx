@@ -33,7 +33,7 @@ interface PendingUser {
 }
 
 export const UserApproval = () => {
-  const { isAdmin, isLoading: authLoading } = useAuth();
+  const { isAnyAdmin: isAdmin, isLoading: authLoading } = useAuth();
   const [pendingUsers, setPendingUsers] = useState<PendingUser[]>([]);
   const [loading, setLoading] = useState(false);
   const [proofUrls, setProofUrls] = useState<Record<string, string>>({});
