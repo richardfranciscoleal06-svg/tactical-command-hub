@@ -117,14 +117,34 @@ export const UNIDADES = [
 ] as const;
 
 export const CARGOS = [
-  'Agente Probatório',
-  'Estagiário GER',
-  'Operador GER',
-  'Chefe de Equipe GER',
-  'Inspetor GER',
-  'Coordenador GER',
-  'Diretor GER',
+  'Soldado 2ª Classe',
+  'Soldado 1ª Classe',
+  'Cabo',
+  '3º Sargento',
+  '2º Sargento',
+  '1º Sargento',
+  'Subtenente',
+  'Aspirante',
+  '2º Tenente',
+  '1º Tenente',
+  'Capitão',
+  'Major',
+  'Tenente Coronel',
+  'Coronel',
 ] as const;
+
+export type SectorValue = 'gate' | 'bpm19' | 'rota' | 'rocam' | 'posto';
+
+export const SECTORS: { value: SectorValue; label: string; short: string }[] = [
+  { value: 'gate',  label: 'GATE - Grupo de Ações Táticas Especiais', short: 'GATE' },
+  { value: 'bpm19', label: '19º BPM - Batalhão de Polícia Militar',   short: '19º BPM' },
+  { value: 'rota',  label: 'ROTA - Rondas Ostensivas Tobias de Aguiar', short: 'ROTA' },
+  { value: 'rocam', label: 'ROCAM - Rondas Ostensivas com Apoio de Motocicletas', short: 'ROCAM' },
+  { value: 'posto', label: 'Posto Comunitário',                       short: 'Posto' },
+];
+
+export const sectorLabel = (v?: string | null) =>
+  SECTORS.find(s => s.value === v)?.short ?? '—';
 
 export interface Artigo {
   codigo: string;

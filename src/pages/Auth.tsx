@@ -6,9 +6,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Shield, LogIn, UserPlus, AlertCircle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { z } from 'zod';
+import { SECTORS, type SectorValue } from '@/types/police';
 
 const loginSchema = z.object({
   username: z.string().trim().min(3, { message: 'Usuário deve ter no mínimo 3 caracteres' }).max(50, { message: 'Usuário muito longo' }),
@@ -19,6 +21,7 @@ const registerSchema = z.object({
   password: z.string().min(6, { message: 'Senha deve ter no mínimo 6 caracteres' }).max(128, { message: 'Senha muito longa' }),
   username: z.string().trim().min(3, { message: 'Usuário deve ter no mínimo 3 caracteres' }).max(50, { message: 'Usuário deve ter no máximo 50 caracteres' }),
   justification: z.string().trim().min(10, { message: 'Justificativa deve ter no mínimo 10 caracteres' }).max(2000, { message: 'Justificativa deve ter no máximo 2000 caracteres' }),
+  sector: z.enum(['gate','bpm19','rota','rocam','posto'], { errorMap: () => ({ message: 'Selecione um setor' }) }),
 });
 
 const Auth = () => {
@@ -34,6 +37,7 @@ const Auth = () => {
   const [registerPassword, setRegisterPassword] = useState('');
   const [username, setUsername] = useState('');
   const [justification, setJustification] = useState('');
+  const [sector, setSector] = useState<SectorValue | ''>('');
   const [registerLoading, setRegisterLoading] = useState(false);
   
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -93,6 +97,7 @@ const Auth = () => {
       password: registerPassword,
       username,
       justification,
+      sector,
     });
 
     if (!validation.success) {
@@ -108,7 +113,7 @@ const Auth = () => {
 
     setRegisterLoading(true);
     
-    const { error } = await signUp(username, registerPassword, username, justification);
+    const { error } = await signUp(username, registerPassword, username, justification, sector as SectorValue);
     
     setRegisterLoading(false);
     
@@ -129,6 +134,7 @@ const Auth = () => {
     setRegisterPassword('');
     setUsername('');
     setJustification('');
+    setSector('');
   };
 
   return (
@@ -144,10 +150,10 @@ const Auth = () => {
             </div>
           </div>
           <h1 className="text-xl font-bold tracking-tight">
-            GER <span className="text-primary">PCESP</span>
+            POLÍCIA <span className="text-primary">MILITAR - SP</span>
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Sistema de Gestão Policial
+            Sistema de Gestão Operacional
           </p>
         </div>
 
@@ -266,6 +272,23 @@ const Auth = () => {
                   )}
                 </div>
 
+                <div>
+                  <Label>Setor</Label>
+                  <Select value={sector} onValueChange={(v) => setSector(v as SectorValue)} disabled={registerLoading}>
+                    <SelectTrigger className="mt-1.5 bg-input border-tactical-border">
+                      <SelectValue placeholder="Selecione seu setor" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SECTORS.map(s => (
+                        <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {errors.sector && (
+                    <p className="text-sm text-destructive mt-1">{errors.sector}</p>
+                  )}
+                </div>
+
                 <Button 
                   type="submit" 
                   className="w-full gap-2"
@@ -284,7 +307,7 @@ const Auth = () => {
         </div>
 
         <p className="text-xs text-center text-muted-foreground mt-4 font-mono">
-          SISTEMA POLICIAL • GER PCESP • v1.0.0
+          POLÍCIA MILITAR - SP • Sistema Operacional • v2.0.0
         </p>
       </div>
     </div>

@@ -64,7 +64,8 @@ const defaultItens: Record<string, number> = Object.keys(ITENS_LABELS).reduce(
 );
 
 export const Patrulhamento = () => {
-  const { user } = useAuth();
+  const { user, currentSector, adminSector } = useAuth();
+  const effectiveSector = (adminSector ?? currentSector) || 'bpm19';
   const [officers, setOfficers] = useState<Officer[]>([]);
   const [patrols, setPatrols] = useState<Patrol[]>([]);
   const [loading, setLoading] = useState(false);
@@ -139,6 +140,7 @@ export const Patrulhamento = () => {
       assinatura: assinatura.trim(),
       senha_viatura: senhaViatura.trim(),
       status: 'active',
+      sector: effectiveSector as any,
     });
     setLoading(false);
 

@@ -80,6 +80,7 @@ export type Database = {
           itens: Json
           policiais: string[]
           relatorio: string | null
+          sector: Database["public"]["Enums"]["sector"]
           senha_viatura: string
           status: string
           unidade: string
@@ -97,6 +98,7 @@ export type Database = {
           itens?: Json
           policiais?: string[]
           relatorio?: string | null
+          sector?: Database["public"]["Enums"]["sector"]
           senha_viatura: string
           status?: string
           unidade: string
@@ -114,6 +116,7 @@ export type Database = {
           itens?: Json
           policiais?: string[]
           relatorio?: string | null
+          sector?: Database["public"]["Enums"]["sector"]
           senha_viatura?: string
           status?: string
           unidade?: string
@@ -130,6 +133,7 @@ export type Database = {
           id: string
           nome_completo: string
           rg: string
+          sector: Database["public"]["Enums"]["sector"]
           status: string
           updated_at: string
           user_id: string
@@ -141,6 +145,7 @@ export type Database = {
           id?: string
           nome_completo: string
           rg: string
+          sector?: Database["public"]["Enums"]["sector"]
           status?: string
           updated_at?: string
           user_id: string
@@ -152,6 +157,7 @@ export type Database = {
           id?: string
           nome_completo?: string
           rg?: string
+          sector?: Database["public"]["Enums"]["sector"]
           status?: string
           updated_at?: string
           user_id?: string
@@ -164,6 +170,7 @@ export type Database = {
           id: string
           justification: string
           proof_url: string | null
+          sector: Database["public"]["Enums"]["sector"]
           status: Database["public"]["Enums"]["user_status"]
           updated_at: string
           user_id: string
@@ -174,6 +181,7 @@ export type Database = {
           id?: string
           justification: string
           proof_url?: string | null
+          sector?: Database["public"]["Enums"]["sector"]
           status?: Database["public"]["Enums"]["user_status"]
           updated_at?: string
           user_id: string
@@ -184,6 +192,7 @@ export type Database = {
           id?: string
           justification?: string
           proof_url?: string | null
+          sector?: Database["public"]["Enums"]["sector"]
           status?: Database["public"]["Enums"]["user_status"]
           updated_at?: string
           user_id?: string
@@ -195,16 +204,19 @@ export type Database = {
         Row: {
           id: string
           role: string
+          sector: Database["public"]["Enums"]["sector"] | null
           user_id: string
         }
         Insert: {
           id?: string
           role: string
+          sector?: Database["public"]["Enums"]["sector"] | null
           user_id: string
         }
         Update: {
           id?: string
           role?: string
+          sector?: Database["public"]["Enums"]["sector"] | null
           user_id?: string
         }
         Relationships: []
@@ -214,10 +226,23 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      can_admin_sector: {
+        Args: {
+          _sector: Database["public"]["Enums"]["sector"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      get_user_sector: {
+        Args: { _user_id: string }
+        Returns: Database["public"]["Enums"]["sector"]
+      }
       has_role: { Args: { _role: string; _user_id: string }; Returns: boolean }
+      is_any_admin: { Args: { _user_id: string }; Returns: boolean }
       is_approved: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
+      sector: "gate" | "bpm19" | "rota" | "rocam" | "posto"
       user_status: "pending" | "approved" | "rejected"
     }
     CompositeTypes: {
@@ -346,6 +371,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      sector: ["gate", "bpm19", "rota", "rocam", "posto"],
       user_status: ["pending", "approved", "rejected"],
     },
   },

@@ -10,7 +10,8 @@ import { UserPlus, BadgeCheck, Calendar, Hash, Loader2, Briefcase } from 'lucide
 import { toast } from 'sonner';
 
 export const PoliceRegistration = () => {
-  const { user } = useAuth();
+  const { user, currentSector, adminSector, isAdmin } = useAuth();
+  const effectiveSector = (adminSector ?? currentSector) || null;
   const [nomeCompleto, setNomeCompleto] = useState('');
   const [rg, setRg] = useState('');
   const [dataIngresso, setDataIngresso] = useState('');
@@ -45,6 +46,12 @@ export const PoliceRegistration = () => {
 
     setLoading(true);
 
+    if (!effectiveSector && !isAdmin) {
+      setLoading(false);
+      toast.error('Seu perfil não tem setor definido.');
+      return;
+    }
+
     const { error } = await supabase
       .from('police_officers')
       .insert({
@@ -54,6 +61,7 @@ export const PoliceRegistration = () => {
         data_ingresso: dataIngresso,
         cargo,
         status: 'pending',
+        sector: (effectiveSector ?? 'bpm19') as any,
       });
 
     setLoading(false);

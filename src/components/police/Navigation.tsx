@@ -1,4 +1,5 @@
 import { TabType } from '@/types/police';
+import { useAuth } from '@/contexts/AuthContext';
 import { 
   FileText, 
   UserPlus, 
@@ -15,21 +16,23 @@ interface NavigationProps {
   onTabChange: (tab: TabType) => void;
 }
 
-const tabs: { id: TabType; label: string; icon: React.ReactNode }[] = [
+const tabs: { id: TabType; label: string; icon: React.ReactNode; adminOnly?: boolean }[] = [
   { id: 'patrulhamento', label: 'Patrulhamento', icon: <Car className="w-5 h-5" /> },
   { id: 'cadastro', label: 'Cadastro', icon: <UserPlus className="w-5 h-5" /> },
-  { id: 'administrativo', label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
-  { id: 'setor', label: 'Setor Admin', icon: <Lock className="w-5 h-5" /> },
-  { id: 'usuarios', label: 'Usuários', icon: <Users className="w-5 h-5" /> },
-  { id: 'chefia', label: 'Chefia', icon: <Crown className="w-5 h-5" /> },
+  { id: 'administrativo', label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5" />, adminOnly: true },
+  { id: 'setor', label: 'Setor Admin', icon: <Lock className="w-5 h-5" />, adminOnly: true },
+  { id: 'usuarios', label: 'Usuários', icon: <Users className="w-5 h-5" />, adminOnly: true },
+  { id: 'chefia', label: 'Chefia', icon: <Crown className="w-5 h-5" />, adminOnly: true },
 ];
 
 export const Navigation = ({ activeTab, onTabChange }: NavigationProps) => {
+  const { isAnyAdmin } = useAuth();
+  const visibleTabs = tabs.filter(t => !t.adminOnly || isAnyAdmin);
   return (
     <nav className="border-b border-tactical-border bg-card/50">
       <div className="container mx-auto px-4">
         <div className="flex gap-1 overflow-x-auto">
-          {tabs.map((tab) => (
+          {visibleTabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => onTabChange(tab.id)}

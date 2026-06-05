@@ -84,7 +84,7 @@ interface AuditLog {
 }
 
 export const AdminSector = () => {
-  const { isAdmin, isLoading: authLoading } = useAuth();
+  const { isAnyAdmin: isAdmin, isLoading: authLoading } = useAuth();
   const [loading, setLoading] = useState(true);
   
   // Data
